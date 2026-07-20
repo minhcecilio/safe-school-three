@@ -1,3 +1,4 @@
+/* ─── App Header ─────────────────────────────────────── */
 .app-header {
   position: fixed;
   top: 0;
@@ -27,7 +28,7 @@
   height: 100%;
 }
 
-/* Logo Section */
+/* ─── Logo ────────────────────────────────────────────── */
 .header-logo {
   display: flex;
   align-items: center;
@@ -56,7 +57,7 @@
   color: var(--primary-light);
 }
 
-/* Nav Menu */
+/* ─── Nav Menu ────────────────────────────────────────── */
 .header-nav {
   display: flex;
   align-items: center;
@@ -98,18 +99,14 @@
   border-radius: 2px;
 }
 
-/* Action Items & Dropdown */
+/* ─── Right Action Area ───────────────────────────────── */
 .header-actions {
   display: flex;
   align-items: center;
   gap: 16px;
-  position: relative;
 }
 
-.avatar-dropdown-container {
-  position: relative;
-}
-
+/* Profile / User icon button */
 .avatar-btn {
   display: flex;
   align-items: center;
@@ -123,9 +120,11 @@
   transition: all var(--transition-fast);
   cursor: pointer;
   outline: none;
+  overflow: hidden;
+  padding: 0;
 }
 
-.avatar-btn:hover, .avatar-btn.active {
+.avatar-btn:hover {
   color: var(--white);
   background-color: var(--primary-light);
   border-color: var(--primary-light);
@@ -137,97 +136,7 @@
   height: 20px;
 }
 
-/* Dropdown Menu Box */
-.avatar-dropdown {
-  position: absolute;
-  top: 50px;
-  right: 0;
-  background-color: var(--white);
-  min-width: 200px;
-  border-radius: var(--border-radius-md);
-  border: 1px solid var(--gray-medium);
-  box-shadow: var(--shadow-lg);
-  padding: 12px 0;
-  display: flex;
-  flex-direction: column;
-  animation: dropdownFadeIn var(--transition-fast);
-  z-index: 1010;
-}
-
-@keyframes dropdownFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.dropdown-user-info {
-  padding: 8px 16px;
-  text-align: left;
-}
-
-.user-display-name {
-  font-weight: 700;
-  color: var(--primary-dark);
-  font-size: 0.95rem;
-}
-
-.user-display-role {
-  font-size: 0.78rem;
-  color: var(--gray-text);
-  margin-top: 2px;
-}
-
-.dropdown-divider {
-  border: 0;
-  height: 1px;
-  background-color: var(--gray-light);
-  margin: 8px 0;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  color: var(--dark-text);
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: background-color var(--transition-fast);
-  text-align: left;
-  width: 100%;
-}
-
-.dropdown-item:hover {
-  background-color: var(--gray-light);
-  color: var(--primary-light);
-}
-
-.dropdown-item-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.dropdown-logout-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.dropdown-logout-btn:hover .text-danger {
-  color: #b91c1c;
-}
-
-.text-danger {
-  color: var(--danger) !important;
-}
-
-/* Mobile Hamburger Menu */
+/* ─── Mobile Hamburger ────────────────────────────────── */
 .hamburger {
   display: none;
   flex-direction: column;
@@ -236,6 +145,10 @@
   height: 18px;
   z-index: 1010;
   cursor: pointer;
+  background: none;
+  border: none;
+  outline: none;
+  padding: 0;
 }
 
 .hamburger .bar {
@@ -246,7 +159,7 @@
   transition: all var(--transition-normal);
 }
 
-/* Responsive Styles */
+/* ─── Responsive ──────────────────────────────────────── */
 @media (max-width: 768px) {
   .hamburger {
     display: flex;
@@ -299,7 +212,6 @@
     border-radius: 2px;
   }
 
-  /* Hamburger transform when menu is active */
   .hamburger.active .bar:nth-child(1) {
     transform: translateY(7.5px) rotate(45deg);
   }

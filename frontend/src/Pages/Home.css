@@ -147,6 +147,42 @@
   margin-bottom: 40px;
 }
 
+/* User greeting bar (shown when logged in) */
+.hero-user-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 10px 16px;
+  background-color: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: var(--border-radius-sm);
+  width: fit-content;
+}
+
+.hero-user-greeting {
+  font-size: 0.9rem;
+  color: var(--primary);
+}
+
+.hero-logout-btn {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+  background: none;
+  border: 1px solid var(--danger);
+  border-radius: var(--border-radius-sm);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-sans);
+}
+
+.hero-logout-btn:hover {
+  background-color: var(--danger);
+  color: var(--white);
+}
+
 .hero-actions {
   display: flex;
   gap: 16px;

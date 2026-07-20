@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase/config';
 import './Profile.css';
 
 export default function Profile() {
@@ -139,12 +141,16 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = () => {
-    // In a real application, integration with Firebase Auth/AuthContext would go here:
-    // e.g., const { logout } = useAuth(); await logout();
-    console.log("Integrate Auth: Logging out user...");
-    alert("Đăng xuất thành công! (Mock action - logic tích hợp sau)");
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Firebase onAuthStateChanged will set user to null automatically.
+      // Redirect to login page after successful sign-out.
+      navigate('/login');
+    } catch (error) {
+      console.error('Lỗi đăng xuất:', error);
+      alert('Đăng xuất thất bại. Vui lòng thử lại.');
+    }
   };
 
   // Simulating picture change
