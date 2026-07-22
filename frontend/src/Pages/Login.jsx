@@ -7,7 +7,8 @@ import {
     signInWithEmailAndPassword,
     signInWithPopup,
 } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { auth, db } from '../firebase/config';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
 import styles from './Auth.module.css';
 
@@ -47,6 +48,32 @@ const Login = () => {
         setError('');
 
         try {
+            const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+            const user = userCredential.user;
+
+            // Kiểm tra email đã xác thực chưa
+            if (!user.emailVerified) {
+                await auth.signOut();
+                setError('Tài khoản chưa được xác thực. Vui lòng kiểm tra email để kích hoạt!');
+                setLoading(false);
+                return;
+            }
+
+            // Kiểm tra is_active (có bị admin khóa?)
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            const userData = userDoc.data();
+            if (!userData?.is_active) {
+                await auth.signOut();
+                setError('Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên');
+                setLoading(false);
+                return;
+            }
+
+            await updateDoc(doc(db, 'users', user.uid), {
+                lastLogin: new Date().toISOString(),
+                is_Online: true,
+            });
+
             await applyPersistence();
             await signInWithEmailAndPassword(auth, email.trim(), password);
             navigate('/');
@@ -65,7 +92,36 @@ const Login = () => {
             await applyPersistence();
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
-            await signInWithPopup(auth, provider);
+            const result = await signInWithPopup(auth, provider);
+            const user = result.user;
+
+            // Lưu vào firestore
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (!userDoc.exists()) {
+                await setDoc(userDocRef, {
+                    uid: user.uid,
+                    displayName: user.displayName || 'User',
+                    email: user.email,
+                    role: 'student',
+                    avatarUrl: user.photoURL || '',
+                    gender: '',
+                    dob: '',
+                    is_Online: true,
+                    is_active: true,
+                    emailVerified: true,
+                    is_anonymous: false,
+                    createdAt: new Date().toISOString(),
+                    lastLogin: new Date().toISOString(),
+                });
+            } else {
+                await updateDoc(userDocRef, {
+                    is_Oneline: true,
+                    lastLogin: new Date().toISOString(),
+                });
+            }
+            
             navigate('/');
         } catch (err) {
             setError(getFirebaseErrorMessage(err.code));
