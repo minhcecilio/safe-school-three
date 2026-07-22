@@ -119,7 +119,7 @@ const Login = () => {
                 });
             } else {
                 await updateDoc(userDocRef, {
-                    is_Oneline: true,
+                    is_Online: true,
                     lastLogin: new Date().toISOString(),
                 });
             }
