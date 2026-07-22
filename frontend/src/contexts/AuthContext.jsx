@@ -22,13 +22,13 @@ export const AuthProvider = ({ children }) => {
                     setUser({
                         uid: firebaseUser.uid,
                         email: firebaseUser.email,
-                        displayName: userData?.displayName || firebaseUser.displayName || 'User',
+                        displayName: userData?.displayName || firebaseUser.displayName || (firebaseUser.isAnonymous ? 'Khách ẩn danh' : 'User'),
                         avatarUrl: userData?.avatarUrl || firebaseUser.photoURL || '',
-                        role: userData?.role || 'student',
+                        role:userData?.role || (firebaseUser.isAnonymous ? 'anonymous' : 'student'),
                         isOnline: userData?.is_Online || false,
                         isActive: userData?.is_active || true,
                         emailVerified: firebaseUser.emailVerified || false,
-                        isAnonymous: userData?.is_anonymous || false,
+                        isAnonymous: userData?.is_anonymous || firebaseUser.isAnonymous || false,
                         lastLogin: userData?.lastLogin || null,
                     });
                 } catch (error) {
@@ -37,9 +37,10 @@ export const AuthProvider = ({ children }) => {
                     setUser({
                         uid: firebaseUser.uid,
                         email: firebaseUser.email,
-                        displayName: firebaseUser.displayName || 'User',
+                        displayName: firebaseUser.displayName || (firebaseUser.isAnonymous ? 'Khách ẩn danh' : 'User'),
                         avatarUrl: firebaseUser.photoURL || '',
-                        role: 'student',
+                        role: firebaseUser.isAnonymous ? 'anonymous' : 'student',
+                        isAnonymous: firebaseUser.isAnonymous,
                     });
                 }
             } else {
