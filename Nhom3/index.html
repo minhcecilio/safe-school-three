@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SafeSchool Chat Room - Nơi lắng nghe, chia sẻ và đồng hành cùng học sinh trong các vấn đề áp lực học tập, tâm lý và bạo lực học đường.">
+  <meta name="keywords" content="safeschool, phòng chat học đường, tư vấn tâm lý, áp lực học tập, bạo lực học đường">
+  <title>SafeSchool Chat Room - Chia sẻ & Đồng hành</title>
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- React & Babel CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React Code with Babel -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Default Seed Data
+    const DEFAULT_ROOMS = [
+      {
+        id: "room-1",
+        name: "Phòng 101 - Áp lực thi cử và học tập",
+        desc: "Nơi chia sẻ những khó khăn về thi cử, bài vở chuyển cấp, và áp lực điểm số từ gia đình.",
+        tag: "ap-luc",
+        creator: "Hệ thống",
+        createdAt: Date.now() - 3600000 * 5,
+        active: true,
+        participants: ["Nguyễn An", "Lê Bình", "Cô Tâm (Tư vấn)"]
+      },
+      {
+        id: "room-2",
+        name: "Phòng 102 - Khủng hoảng tâm lý & Quan hệ",
+        desc: "Tư vấn gỡ rối về tình bạn, tình yêu tuổi học trò, bất hòa gia đình và căng thẳng cảm xúc.",
+        tag: "tam-ly",
+        creator: "Hệ thống",
+        createdAt: Date.now() - 3600000 * 3,
+        active: true,
+        participants: ["Trần Minh", "Cô Tâm (Tư vấn)"]
+      },
+      {
+        id: "room-3",
+        name: "Phòng 103 - Báo cáo & Hỗ trợ bạo lực học đường",
+        desc: "Kênh tiếp nhận bảo mật và giải quyết các tình huống bắt nạt, đe dọa hoặc cô lập học đường.",
+        tag: "bao-luc",
+        creator: "Hệ thống",
+        createdAt: Date.now() - 3600000 * 24,
+        active: true,
+        participants: ["Ẩn danh"]
+      }
+    ];
+
+    const DEFAULT_MESSAGES = [
+      {
+        id: "m1",
+        roomId: "room-1",
+        sender: "Nguyễn An",
+        role: "hoc_sinh",
+        content: "Chào cô và mọi người. Dạo này em mất ngủ liên tục vì lo ôn thi đại học. Đọc sách đến 2h sáng nhưng cứ đặt lưng xuống là nghĩ đến chuyện trượt nguyện vọng 1. Em mệt mỏi quá ạ...",
+        timestamp: Date.now() - 3600000 * 4.8
+      },
+      {
+        id: "m2",
+        roomId: "room-1",
+        sender: "Lê Bình",
+        role: "hoc_sinh",
+        content: "Mình cũng y hệt An. Bố mẹ mình cứ nói không ép điểm số, nhưng lại suốt ngày so sánh mình với con nhà người ta làm mình áp lực kinh khủng.",
+        timestamp: Date.now() - 3600000 * 4.5
+      },
+      {
+        id: "m3",
+        roomId: "room-1",
+        sender: "Cô Tâm (Tư vấn)",
+        role: "tham_van_vien",
+        content: "Chào An và Bình. Cô rất chia sẻ với áp lực các em đang gánh vác. Thức khuya học bài đến 2h sáng thực chất sẽ làm tăng hormone stress cortisol, khiến não bộ quá tải và khó tiếp thu hơn. Việc đầu tiên cô khuyên các em là lập lại thời gian biểu khoa học và dừng học trước 23h nhé. Chúng ta sẽ cùng nhau chia sẻ thêm về cách vượt qua kỳ vọng gia đình.",
+        timestamp: Date.now() - 3600000 * 4.2
+      },
+      {
+        id: "m4",
+        roomId: "room-2",
+        sender: "Trần Minh",
+        role: "hoc_sinh",
+        content: "Chào cô. Em có xích mích với các bạn trong tổ học tập. Các bạn ấy tự lập nhóm chat riêng để chơi và nói xấu em, giờ lên lớp em cảm thấy cô đơn vô cùng.",
+        timestamp: Date.now() - 3600000 * 2.8
+      },
+      {
+        id: "m5",
+        roomId: "room-2",
+        sender: "Cô Tâm (Tư vấn)",
+        role: "tham_van_vien",
+        content: "Chào Minh. Cô hiểu cảm giác cô lập này rất nặng nề và đau lòng. Ở tuổi các em, tình bạn đóng vai trò vô cùng quan trọng. Em có bao giờ thử thẳng thắn trò chuyện với một người bạn thân nhất trong nhóm đó để tìm hiểu nguyên nhân chưa? Hãy cùng cô phân tích từng bước nhé.",
+        timestamp: Date.now() - 3600000 * 2.5
+      }
+    ];
+
+    // Main App Component
+    function App() {
+      const [user, setUser] = useState(null);
+      const [currentPage, setCurrentPage] = useState('home'); // 'home' | 'chat' | 'admin'
+      const [rooms, setRooms] = useState([]);
+      const [messages, setMessages] = useState([]);
+      
+      const [activeRoomId, setActiveRoomId] = useState(null);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [selectedCategory, setSelectedCategory] = useState('all');
+      
+      const [showCreateModal, setShowCreateModal] = useState(false);
+      const [showDeleteConfirmId, setShowDeleteConfirmId] = useState(null);
+
+      // Initialize state from local storage or defaults
+      useEffect(() => {
+        const storedRooms = localStorage.getItem('safesch_rooms');
+        const storedMessages = localStorage.getItem('safesch_messages');
+        const storedUser = localStorage.getItem('safesch_user');
+
+        if (storedRooms) {
+          setRooms(JSON.parse(storedRooms));
+        } else {
+          localStorage.setItem('safesch_rooms', JSON.stringify(DEFAULT_ROOMS));
+          setRooms(DEFAULT_ROOMS);
+        }
+
+        if (storedMessages) {
+          setMessages(JSON.parse(storedMessages));
+        } else {
+          localStorage.setItem('safesch_messages', JSON.stringify(DEFAULT_MESSAGES));
+          setMessages(DEFAULT_MESSAGES);
+        }
+
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+          // Redirect manager to admin view, student to home view
+          if (parsedUser.role === 'tham_van_vien') {
+            setCurrentPage('admin');
+          } else {
+            setCurrentPage('home');
+          }
+        }
+      }, []);
+
+      // Realtime multi-tab Syncing
+      useEffect(() => {
+        const handleStorageChange = (e) => {
+          if (e.key === 'safesch_rooms') {
+            setRooms(JSON.parse(e.newValue || '[]'));
+          }
+          if (e.key === 'safesch_messages') {
+            setMessages(JSON.parse(e.newValue || '[]'));
+          }
+          if (e.key === 'safesch_user') {
+            const newUser = e.newValue ? JSON.parse(e.newValue) : null;
+            setUser(newUser);
+            if (newUser) {
+              setCurrentPage(newUser.role === 'tham_van_vien' ? 'admin' : 'home');
+            } else {
+              setCurrentPage('home');
+            }
+          }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+      }, []);
+
+      // Helper function to update state and sync localStorage
+      const updateRoomsState = (updatedRooms) => {
+        setRooms(updatedRooms);
+        localStorage.setItem('safesch_rooms', JSON.stringify(updatedRooms));
+      };
+
+      const updateMessagesState = (updatedMessages) => {
+        setMessages(updatedMessages);
+        localStorage.setItem('safesch_messages', JSON.stringify(updatedMessages));
+      };
+
+      // Handle Authentication
+      const handleLogin = (username, role) => {
+        const userObj = { name: username, role };
+        setUser(userObj);
+        localStorage.setItem('safesch_user', JSON.stringify(userObj));
+        
+        if (role === 'tham_van_vien') {
+          setCurrentPage('admin');
+        } else {
+          setCurrentPage('home');
+        }
+      };
+
+      const handleLogout = () => {
+        setUser(null);
+        localStorage.removeItem('safesch_user');
+        setCurrentPage('home');
+      };
+
+      // Room actions
+      const handleCreateRoom = (roomName, category, roomDesc) => {
+        const newRoom = {
+          id: 'room-' + Date.now(),
+          name: roomName,
+          desc: roomDesc || "Không có mô tả chi tiết.",
+          tag: category,
+          creator: user ? user.name : "Ẩn danh",
+          createdAt: Date.now(),
+          active: true,
+          participants: [user ? user.name : "Ẩn danh"]
+        };
+
+        const updatedRooms = [...rooms, newRoom];
+        updateRoomsState(updatedRooms);
+        setShowCreateModal(false);
+
+        // Auto-enter created room
+        setActiveRoomId(newRoom.id);
+        setCurrentPage('chat');
+      };
+
+      const handleDeleteRoom = (roomId) => {
+        // Filter out room or archive it
+        const updatedRooms = rooms.filter(r => r.id !== roomId);
+        // Clear active selection if it was deleted
+        if (activeRoomId === roomId) {
+          setActiveRoomId(null);
+        }
+        updateRoomsState(updatedRooms);
+        
+        // Clean up messages of the deleted room
+        const updatedMessages = messages.filter(m => m.roomId !== roomId);
+        updateMessagesState(updatedMessages);
+
+        setShowDeleteConfirmId(null);
+      };
+
+      const handleSendMessage = (text) => {
+        if (!text.trim() || !activeRoomId) return;
+
+        const newMessage = {
+          id: 'msg-' + Date.now(),
+          roomId: activeRoomId,
+          sender: user ? user.name : "Ẩn danh",
+          role: user ? user.role : "hoc_sinh",
+          content: text.trim(),
+          timestamp: Date.now()
+        };
+
+        const updatedMessages = [...messages, newMessage];
+        updateMessagesState(updatedMessages);
+
+        // Add sender to participants list if not already there
+        const currentRoom = rooms.find(r => r.id === activeRoomId);
+        if (currentRoom && !currentRoom.participants.includes(newMessage.sender)) {
+          const updatedRooms = rooms.map(r => {
+            if (r.id === activeRoomId) {
+              return {
+                ...r,
+                participants: [...r.participants, newMessage.sender]
+              };
+            }
+            return r;
+          });
+          updateRoomsState(updatedRooms);
+        }
+      };
+
+      // Helper to count metrics
+      const activeRoomsCount = rooms.length;
+      const totalMessagesCount = messages.length;
+      const distinctUsersCount = new Set([
+        ...messages.map(m => m.sender),
+        ...rooms.flatMap(r => r.participants)
+      ]).size;
+
+      return (
+        <div className="app-container">
+          {/* Auth Overlay */}
+          {!user && <LoginScreen onLogin={handleLogin} />}
+
+          {user && (
+            <>
+              {/* Header Navigation */}
+              <header className="app-header">
+                <div className="logo-section">
+                  <div className="logo-icon">S</div>
+                  <span className="logo-text">SafeSchool Chat</span>
+                </div>
+                
+                <div className="nav-controls">
+                  <div className="nav-links">
+                    {user.role === 'hoc_sinh' ? (
+                      <>
+                        <button 
+                          id="nav-btn-home"
+                          className={`nav-btn ${currentPage === 'home' ? 'active' : ''}`}
+                          onClick={() => setCurrentPage('home')}
+                        >
+                          🏠 Trang chủ
+                        </button>
+                        <button 
+                          id="nav-btn-chat"
+                          className={`nav-btn ${currentPage === 'chat' ? 'active' : ''}`}
+                          onClick={() => {
+                            // Default to first room if none active
+                            if (!activeRoomId && rooms.length > 0) {
+                              setActiveRoomId(rooms[0].id);
+                            }
+                            setCurrentPage('chat');
+                          }}
+                        >
+                          💬 Phòng chat
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button 
+                          id="nav-btn-admin"
+                          className={`nav-btn admin-mode ${currentPage === 'admin' ? 'active' : ''}`}
+                          onClick={() => setCurrentPage('admin')}
+                        >
+                          🛡️ Quản lý phòng chat
+                        </button>
+                        <button 
+                          id="nav-btn-chat-counselor"
+                          className={`nav-btn ${currentPage === 'chat' ? 'active' : ''}`}
+                          onClick={() => {
+                            if (!activeRoomId && rooms.length > 0) {
+                              setActiveRoomId(rooms[0].id);
+                            }
+                            setCurrentPage('chat');
+                          }}
+                        >
+                          💬 Tham gia Chat
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="user-profile-badge">
+                    <span className={`user-avatar ${user.role === 'tham_van_vien' ? 'counselor' : ''}`}>
+                      {user.name.charAt(0).toUpperCase()}
+                    </span>
+                    <div>
+                      <div style={{fontWeight: 700, fontSize: '0.8rem'}}>{user.name}</div>
+                      <div style={{fontSize: '0.65rem', color: 'var(--text-secondary)'}}>
+                        {user.role === 'tham_van_vien' ? '🛡️ Tham vấn viên' : '🎓 Học sinh'}
+                      </div>
+                    </div>
+                    <button className="logout-btn" onClick={handleLogout} title="Đăng xuất">Thoát</button>
+                  </div>
+                </div>
+              </header>
+
+              {/* Main Workspace based on current page */}
+              <main className="main-workspace">
+                {currentPage === 'home' && (
+                  <HomeView 
+                    rooms={rooms}
+                    messages={messages}
+                    user={user}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    selectedCategory={selectedCategory}
+                    setSelectedCategory={setSelectedCategory}
+                    onCreateClick={() => setShowCreateModal(true)}
+                    onEnterRoom={(roomId) => {
+                      setActiveRoomId(roomId);
+                      setCurrentPage('chat');
+                    }}
+                  />
+                )}
+
+                {currentPage === 'chat' && (
+                  <ChatView 
+                    rooms={rooms}
+                    messages={messages}
+                    user={user}
+                    activeRoomId={activeRoomId}
+                    setActiveRoomId={setActiveRoomId}
+                    onSendMessage={handleSendMessage}
+                    onLeaveRoom={() => setCurrentPage('home')}
+                  />
+                )}
+
+                {currentPage === 'admin' && user.role === 'tham_van_vien' && (
+                  <AdminView 
+                    rooms={rooms}
+                    messages={messages}
+                    activeRoomsCount={activeRoomsCount}
+                    totalMessagesCount={totalMessagesCount}
+                    distinctUsersCount={distinctUsersCount}
+                    onDeleteClick={(roomId) => setShowDeleteConfirmId(roomId)}
+                  />
+                )}
+              </main>
+
+              {/* Modals */}
+              {showCreateModal && (
+                <CreateRoomModal 
+                  onClose={() => setShowCreateModal(false)}
+                  onSubmit={handleCreateRoom}
+                />
+              )}
+
+              {showDeleteConfirmId && (
+                <DeleteConfirmModal 
+                  roomId={showDeleteConfirmId}
+                  roomName={rooms.find(r => r.id === showDeleteConfirmId)?.name || ''}
+                  onClose={() => setShowDeleteConfirmId(null)}
+                  onConfirm={() => handleDeleteRoom(showDeleteConfirmId)}
+                />
+              )}
+            </>
+          )}
+        </div>
+      );
+    }
+
+    // Login Overlay Component
+    function LoginScreen({ onLogin }) {
+      const [name, setName] = useState('');
+      const [role, setRole] = useState('hoc_sinh'); // 'hoc_sinh' | 'tham_van_vien'
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        
+        let finalName = name.trim();
+        if (role === 'tham_van_vien' && !finalName.includes('(Tư vấn)')) {
+          finalName = 'Cô ' + finalName + ' (Tư vấn)';
+        }
+        
+        onLogin(finalName, role);
+      };
+
+      return (
+        <div className="auth-overlay">
+          <div className="auth-card">
+            <h2>SafeSchool Portal</h2>
+            <p>Chào mừng bạn đến với Cổng tư vấn & Hỗ trợ tâm lý học đường</p>
+            
+            <form onSubmit={handleSubmit} style={{ width: '100%' }}>
+              <div className="form-group">
+                <label htmlFor="login-username">Họ và tên của bạn</label>
+                <input 
+                  type="text" 
+                  id="login-username"
+                  className="text-input" 
+                  placeholder="Nhập tên..." 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Bạn tham gia với vai trò nào?</label>
+                <div className="role-selector">
+                  <div 
+                    id="role-student-btn"
+                    className={`role-option ${role === 'hoc_sinh' ? 'selected hoc_sinh' : ''}`}
+                    onClick={() => setRole('hoc_sinh')}
+                  >
+                    <span className="role-icon">🎓</span>
+                    <span className="role-title">Học sinh</span>
+                    <span className="role-desc">Cần chia sẻ, đặt câu hỏi, tư vấn kín</span>
+                  </div>
+
+                  <div 
+                    id="role-counselor-btn"
+                    className={`role-option ${role === 'tham_van_vien' ? 'selected tham_van_vien' : ''}`}
+                    onClick={() => setRole('tham_van_vien')}
+                  >
+                    <span className="role-icon">🛡️</span>
+                    <span className="role-title">Tham vấn viên</span>
+                    <span className="role-desc">Giáo viên tâm lý, quản lý phòng chat</span>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                id="login-submit-btn"
+                className={`submit-btn ${role === 'tham_van_vien' ? 'counselor' : ''}`}
+              >
+                Vào ứng dụng
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    // Home / Room list Component
+    function HomeView({ 
+      rooms, 
+      messages,
+      user,
+      searchQuery, 
+      setSearchQuery, 
+      selectedCategory, 
+      setSelectedCategory,
+      onCreateClick,
+      onEnterRoom
+    }) {
+      const filteredRooms = rooms.filter(room => {
+        const matchesSearch = room.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              room.desc.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesCategory = selectedCategory === 'all' || room.tag === selectedCategory;
+        return matchesSearch && matchesCategory;
+      });
+
+      const getCategoryName = (tag) => {
+        switch(tag) {
+          case 'ap-luc': return '📚 Áp lực học tập';
+          case 'tam-ly': return '🧠 Tâm lý học đường';
+          case 'bao-luc': return '🛡️ Bạo lực học đường';
+          default: return '💬 Chủ đề khác';
+        }
+      };
+
+      const getMsgCount = (roomId) => {
+        return messages.filter(m => m.roomId === roomId).length;
+      };
+
+      return (
+        <div className="dashboard-view">
+          <div className="dashboard-hero">
+            <div className="hero-text">
+              <h1>Xin chào, {user.name.split(' (Tư vấn)')[0]}! 👋</h1>
+              <p>Hệ thống hỗ trợ tâm lý SafeSchool luôn sẵn sàng lắng nghe mọi trăn trở của bạn. Dù là áp lực học tập, mối quan hệ bè bạn hay các vấn đề bắt nạt học đường, bạn không hề cô đơn.</p>
+            </div>
+            {user.role === 'hoc_sinh' && (
+              <button className="create-room-trigger" onClick={onCreateClick}>
+                ➕ Tạo phòng tư vấn mới
+              </button>
+            )}
+          </div>
+
+          <div className="section-title">
+            <span>Danh sách phòng chat tư vấn</span>
+            <span className="section-title-badge">{filteredRooms.length} phòng</span>
+          </div>
+
+          {/* Search and Tag Filtering */}
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input 
+              type="text" 
+              id="room-search"
+              className="text-input" 
+              placeholder="Tìm kiếm phòng chat theo tên hoặc nội dung..." 
+              style={{ maxWidth: '400px', padding: '10px 16px' }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            
+            <div className="category-filters" style={{ marginBottom: 0 }}>
+              <div 
+                className={`filter-tab ${selectedCategory === 'all' ? 'active' : ''}`}
+                onClick={() => setSelectedCategory('all')}
+              >
+                Tất cả
+              </div>
+              <div 
+                className={`filter-tab ${selectedCategory === 'ap-luc' ? 'active' : ''}`}
+                onClick={() => setSelectedCategory('ap-luc')}
+              >
+                📖 Áp lực học tập
+              </div>
+              <div 
+                className={`filter-tab ${selectedCategory === 'tam-ly' ? 'active' : ''}`}
+                onClick={() => setSelectedCategory('tam-ly')}
+              >
+                🧠 Tâm lý học tập
+              </div>
+              <div 
+                className={`filter-tab ${selectedCategory === 'bao-luc' ? 'active' : ''}`}
+                onClick={() => setSelectedCategory('bao-luc')}
+              >
+                🛡️ Bạo lực học đường
+              </div>
+              <div 
+                className={`filter-tab ${selectedCategory === 'khac' ? 'active' : ''}`}
+                onClick={() => setSelectedCategory('khac')}
+              >
+                ✨ Khác
+              </div>
+            </div>
+          </div>
+
+          {/* Rooms Cards Grid */}
+          {filteredRooms.length > 0 ? (
+            <div className="rooms-grid">
+              {filteredRooms.map(room => {
+                const hasJoined = room.participants.includes(user.name);
+                return (
+                  <div key={room.id} className={`room-card ${hasJoined ? 'joined' : ''}`}>
+                    <div>
+                      <div className="room-header">
+                        <span className={`room-tag ${room.tag}`}>{getCategoryName(room.tag)}</span>
+                        {hasJoined && <span className="badge active" style={{fontSize: '0.65rem'}}>Đã tham gia</span>}
+                      </div>
+                      <h3 className="room-title">{room.name}</h3>
+                      <p className="room-desc">{room.desc}</p>
+                    </div>
+
+                    <div className="room-footer">
+                      <div className="room-meta">
+                        <span>👥 {room.participants.length} người</span>
+                        <span>💬 {getMsgCount(room.id)} tin nhắn</span>
+                      </div>
+                      <button 
+                        className={`room-join-btn ${hasJoined ? 'enter-btn' : ''}`}
+                        onClick={() => onEnterRoom(room.id)}
+                      >
+                        {hasJoined ? 'Vào phòng ➜' : 'Tham gia'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">📭</div>
+              <h3>Không tìm thấy phòng chat nào</h3>
+              <p>Thử tìm kiếm với từ khóa khác hoặc chuyển bộ lọc danh mục.</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Interactive Chat Room View
+    function ChatView({ 
+      rooms, 
+      messages, 
+      user, 
+      activeRoomId, 
+      setActiveRoomId, 
+      onSendMessage,
+      onLeaveRoom
+    }) {
+      const [text, setText] = useState('');
+      const feedRef = useRef(null);
+
+      // Filter joined rooms for the sidebar
+      const joinedRooms = rooms.filter(r => r.participants.includes(user.name) || user.role === 'tham_van_vien');
+      const activeRoom = rooms.find(r => r.id === activeRoomId);
+      const activeRoomMessages = messages.filter(m => m.roomId === activeRoomId);
+
+      // Auto-scroll to bottom of feed
+      useEffect(() => {
+        if (feedRef.current) {
+          feedRef.current.scrollTop = feedRef.current.scrollHeight;
+        }
+      }, [activeRoomMessages.length, activeRoomId]);
+
+      const handleSend = (e) => {
+        e.preventDefault();
+        if (!text.trim()) return;
+        onSendMessage(text);
+        setText('');
+      };
+
+      const getCategoryLabel = (tag) => {
+        switch(tag) {
+          case 'ap-luc': return '📚 Áp lực học tập';
+          case 'tam-ly': return '🧠 Tâm lý';
+          case 'bao-luc': return '🛡️ Bạo lực';
+          default: return '💬 Khác';
+        }
+      };
+
+      const formatTime = (ts) => {
+        return new Date(ts).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      };
+
+      return (
+        <div className="chat-workspace">
+          {/* Chat Left Sidebar */}
+          <aside className="chat-sidebar">
+            <div className="sidebar-header">
+              <h3>Hội thoại của bạn</h3>
+              <div style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>
+                {user.role === 'tham_van_vien' ? 'Danh sách tất cả các phòng' : 'Các phòng bạn đã tham gia'}
+              </div>
+            </div>
+
+            <div className="sidebar-list">
+              {joinedRooms.length > 0 ? (
+                joinedRooms.map(room => {
+                  const roomMessages = messages.filter(m => m.roomId === room.id);
+                  const lastMsg = roomMessages[roomMessages.length - 1];
+                  const isActive = room.id === activeRoomId;
+
+                  return (
+                    <div 
+                      key={room.id} 
+                      className={`sidebar-item ${isActive ? 'active' : ''}`}
+                      onClick={() => setActiveRoomId(room.id)}
+                    >
+                      <div className="sidebar-item-header">
+                        <span className="sidebar-item-title">{room.name}</span>
+                        <span className="sidebar-item-tag">{getCategoryLabel(room.tag)}</span>
+                      </div>
+                      <span className="sidebar-item-snippet">
+                        {lastMsg ? `${lastMsg.sender}: ${lastMsg.content}` : 'Chưa có cuộc trò chuyện nào'}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem'}}>
+                  Chưa tham gia phòng nào. Hãy chọn một phòng ở Trang chủ!
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* Chat Main Window */}
+          {activeRoom ? (
+            <div className="chat-window">
+              {/* Chat Header */}
+              <div className="chat-header">
+                <div className="chat-header-info">
+                  <div className="chat-header-title">
+                    {activeRoom.name}
+                    <span className="pulse-dot"></span>
+                  </div>
+                  <div className="chat-header-desc">
+                    💡 Thành viên: {activeRoom.participants.join(', ')}
+                  </div>
+                </div>
+
+                <div className="chat-actions">
+                  <button className="leave-room-btn" onClick={onLeaveRoom}>
+                    🚪 Thoát phòng
+                  </button>
+                </div>
+              </div>
+
+              {/* Chat Feed Messages */}
+              <div className="chat-messages" ref={feedRef}>
+                {activeRoomMessages.length > 0 ? (
+                  activeRoomMessages.map((msg) => {
+                    const isOutgoing = msg.sender === user.name;
+                    return (
+                      <div 
+                        key={msg.id} 
+                        className={`message-wrapper ${isOutgoing ? 'outgoing' : 'incoming'} ${msg.role === 'tham_van_vien' ? 'counselor-message' : ''}`}
+                      >
+                        <div className="message-meta">
+                          <span style={{ fontWeight: 700 }}>{msg.sender}</span>
+                          <span className={`role-badge ${msg.role === 'tham_van_vien' ? 'counselor' : 'student'}`}>
+                            {msg.role === 'tham_van_vien' ? 'Tư vấn' : 'Học sinh'}
+                          </span>
+                        </div>
+                        <div className="message-bubble">
+                          {msg.content}
+                        </div>
+                        <div className="message-time">
+                          {formatTime(msg.timestamp)}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="transcript-empty">
+                    <span style={{fontSize: '2rem'}}>💬</span>
+                    <h4 style={{marginTop: '8px'}}>Bắt đầu cuộc trò chuyện</h4>
+                    <p style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Hãy gửi lời chào đầu tiên để nhận tư vấn từ chuyên gia tâm lý trường học.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input Bar */}
+              <div className="chat-input-panel">
+                <form onSubmit={handleSend} className="chat-input-form">
+                  <textarea 
+                    id="chat-textarea-input"
+                    className="chat-text-area" 
+                    placeholder="Nhập nội dung chia sẻ của bạn tại đây... (Nhấn Enter hoặc nút gửi)"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend(e);
+                      }
+                    }}
+                  />
+                  <button 
+                    type="submit" 
+                    id="chat-send-btn"
+                    className={`chat-send-btn ${user.role === 'tham_van_vien' ? 'counselor' : ''}`}
+                    title="Gửi"
+                  >
+                    🚀
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : (
+            <div className="chat-window" style={{justifyContent: 'center', alignItems: 'center', color: 'var(--text-secondary)'}}>
+              <span style={{fontSize: '3rem'}}>💬</span>
+              <h3>Hãy chọn một phòng chat tư vấn</h3>
+              <p>Chọn từ danh sách bên trái hoặc quay về trang chủ để tìm phòng mới.</p>
+            </div>
+          )}
+
+          {/* Chat Side Resource Panel */}
+          <aside className="chat-resource-sidebar">
+            <h3 style={{fontSize: '1rem', fontWeight: 800}}>Thông tin & Trợ giúp</h3>
+            
+            <div className="resource-card">
+              <h4>📞 Đường dây nóng khẩn cấp</h4>
+              <div className="hotline-item">
+                <span className="hotline-name">Tổng đài quốc gia trẻ em</span>
+                <span className="hotline-number">111</span>
+              </div>
+              <div className="hotline-item">
+                <span className="hotline-name">Hỗ trợ tâm lý học đường</span>
+                <span className="hotline-number">1900 6789</span>
+              </div>
+            </div>
+
+            <div className="resource-card">
+              <h4>💡 Bí quyết cân bằng tâm lý</h4>
+              <p style={{marginBottom: '8px'}}>1. **Hít thở sâu 4-7-8**: Hít vào 4 giây, giữ hơi 7 giây, thở ra bằng miệng 8 giây để giảm lo âu tức thì.</p>
+              <p style={{marginBottom: '8px'}}>2. **Viết nhật ký cảm xúc**: Viết ra giấy những suy nghĩ tiêu cực giúp giải phóng áp lực cho não bộ.</p>
+              <p>3. **Không cô lập bản thân**: Chia sẻ khó khăn với ít nhất một người lớn đáng tin cậy (như thầy cô phòng tư vấn học đường).</p>
+            </div>
+          </aside>
+        </div>
+      );
+    }
+
+    // Counselor / Admin Dashboard View
+    function AdminView({ 
+      rooms, 
+      messages, 
+      activeRoomsCount, 
+      totalMessagesCount, 
+      distinctUsersCount,
+      onDeleteClick
+    }) {
+      const [selectedRoomId, setSelectedRoomId] = useState(null);
+      const selectedRoom = rooms.find(r => r.id === selectedRoomId);
+      const selectedRoomMessages = messages.filter(m => m.roomId === selectedRoomId);
+
+      const getCategoryLabel = (tag) => {
+        switch(tag) {
+          case 'ap-luc': return '📚 Áp lực học tập';
+          case 'tam-ly': return '🧠 Tâm lý học đường';
+          case 'bao-luc': return '🛡️ Bạo lực học đường';
+          default: return '💬 Khác';
+        }
+      };
+
+      const formatDateTime = (ts) => {
+        return new Date(ts).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+      };
+
+      return (
+        <div className="admin-view">
+          <div className="admin-header">
+            <div className="admin-title">
+              <h1>Trang Quản Lý Phòng Tư Vấn 🛡️</h1>
+              <p>Bảng điều khiển cho Tham vấn viên để rà soát, đọc lịch sử và đóng/xóa phòng chat đã hoàn thành tư vấn.</p>
+            </div>
+          </div>
+
+          {/* Stats Summary Panel */}
+          <div className="stats-grid">
+            <div className="stats-card">
+              <span className="stats-label">Tổng số phòng đang mở</span>
+              <span className="stats-value">{activeRoomsCount}</span>
+            </div>
+            <div className="stats-card">
+              <span className="stats-label">Tổng số tin nhắn</span>
+              <span className="stats-value">{totalMessagesCount}</span>
+            </div>
+            <div className="stats-card">
+              <span className="stats-label">Số người dùng tham gia</span>
+              <span className="stats-value">{distinctUsersCount}</span>
+            </div>
+            <div className="stats-card">
+              <span className="stats-label">Trạng thái hệ thống</span>
+              <span className="stats-value text-success" style={{fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                <span className="pulse-dot"></span> Hoạt động tốt
+              </span>
+            </div>
+          </div>
+
+          {/* Grid Layout for Admin Controls */}
+          <div className="admin-workspace-grid">
+            
+            {/* Table of rooms */}
+            <div className="admin-panel-card">
+              <div className="panel-header">
+                <span className="panel-title">Danh sách phòng chat tư vấn toàn trường</span>
+              </div>
+              <div className="panel-body-scrollable">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Tên phòng</th>
+                      <th>Chủ đề</th>
+                      <th>Người tạo</th>
+                      <th>Tin nhắn</th>
+                      <th>Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rooms.length > 0 ? (
+                      rooms.map(room => {
+                        const isSelected = room.id === selectedRoomId;
+                        const msgCount = messages.filter(m => m.roomId === room.id).length;
+                        return (
+                          <tr 
+                            key={room.id} 
+                            className={isSelected ? 'selected' : ''}
+                            onClick={() => setSelectedRoomId(room.id)}
+                            style={{ transition: 'all 0.2s' }}
+                          >
+                            <td style={{fontWeight: 700}}>{room.name}</td>
+                            <td>
+                              <span className={`room-tag ${room.tag}`} style={{fontSize: '0.65rem', padding: '2px 6px'}}>
+                                {getCategoryLabel(room.tag).split(' ')[1]}
+                              </span>
+                            </td>
+                            <td style={{color: 'var(--text-secondary)'}}>{room.creator}</td>
+                            <td>{msgCount} tin</td>
+                            <td>
+                              <button 
+                                className="close-room-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteClick(room.id);
+                                }}
+                                style={{
+                                  padding: '4px 8px', 
+                                  fontSize: '0.7rem', 
+                                  background: 'rgba(244, 63, 94, 0.1)', 
+                                  border: '1px solid rgba(244, 63, 94, 0.3)',
+                                  color: 'var(--accent-danger)'
+                                }}
+                              >
+                                Đóng phòng
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan="5" style={{textAlign: 'center', padding: '32px', color: 'var(--text-muted)'}}>
+                          Không có phòng chat nào trong hệ thống.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* View chat messages ("Xem Chat") */}
+            <div className="admin-panel-card" style={{ borderLeft: '1px solid var(--glass-border)' }}>
+              <div className="panel-header">
+                <span className="panel-title">Nội dung chi tiết & Xem Chat</span>
+              </div>
+              
+              {selectedRoom ? (
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+                  {/* Transcript Room Header */}
+                  <div className="transcript-header">
+                    <div className="transcript-room-info">
+                      <h4>{selectedRoom.name}</h4>
+                      <p>Khởi tạo bởi {selectedRoom.creator} • {formatDateTime(selectedRoom.createdAt)}</p>
+                    </div>
+                    <button 
+                      className="close-room-btn" 
+                      onClick={() => onDeleteClick(selectedRoom.id)}
+                    >
+                      ❌ Đóng / Xóa phòng
+                    </button>
+                  </div>
+
+                  {/* Transcript Room Messages */}
+                  <div className="transcript-messages-box">
+                    {selectedRoomMessages.length > 0 ? (
+                      selectedRoomMessages.map(msg => (
+                        <div 
+                          key={msg.id} 
+                          className={`transcript-message-item ${msg.role === 'tham_van_vien' ? 'counselor' : 'student'}`}
+                        >
+                          <div className="transcript-msg-sender">
+                            <span>{msg.sender}</span>
+                            <span className={`role-badge ${msg.role === 'tham_van_vien' ? 'counselor' : 'student'}`} style={{fontSize: '0.55rem', padding: '0px 4px'}}>
+                              {msg.role === 'tham_van_vien' ? 'Tư vấn' : 'Học sinh'}
+                            </span>
+                          </div>
+                          <div className="transcript-msg-body">{msg.content}</div>
+                          <span className="transcript-msg-time">{formatDateTime(msg.timestamp).split(' ')[1]}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="transcript-empty">
+                        <span style={{fontSize: '2rem'}}>💬</span>
+                        <h4 style={{marginTop: '8px'}}>Phòng trống</h4>
+                        <p style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Chưa phát sinh bất kỳ tin nhắn nào trong phòng này.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="transcript-empty">
+                  <span style={{fontSize: '3rem'}}>🔍</span>
+                  <h4 style={{marginTop: '12px'}}>Chọn một phòng chat ở bảng bên cạnh</h4>
+                  <p style={{fontSize: '0.75rem', color: 'var(--text-secondary)', maxWidth: '280px', margin: '0 auto'}}>
+                    Nhấp vào bất kỳ dòng nào trong bảng để xem lịch sử trao đổi chi tiết của phòng đó tại đây.
+                  </p>
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
+    // Modal to create chat rooms
+    function CreateRoomModal({ onClose, onSubmit }) {
+      const [roomName, setRoomName] = useState('');
+      const [category, setCategory] = useState('ap-luc');
+      const [roomDesc, setRoomDesc] = useState('');
+
+      const handleFormSubmit = (e) => {
+        e.preventDefault();
+        if (!roomName.trim()) return;
+        onSubmit(roomName.trim(), category, roomDesc.trim());
+      };
+
+      return (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '8px' }}>Tạo phòng chat tư vấn</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+              Hãy đặt tên phòng và mô tả vấn đề bạn đang gặp phải. Bạn có thể trò chuyện bảo mật với các chuyên gia tâm lý trường học.
+            </p>
+
+            <form onSubmit={handleFormSubmit}>
+              <div className="form-group">
+                <label htmlFor="modal-room-name">Tên phòng tư vấn</label>
+                <input 
+                  type="text" 
+                  id="modal-room-name"
+                  className="text-input" 
+                  placeholder="Ví dụ: Tư vấn áp lực ôn thi lớp 12, Áp lực từ bạn bè..." 
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="modal-room-tag">Chủ đề cần tư vấn</label>
+                <select 
+                  id="modal-room-tag"
+                  className="text-input"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  style={{ background: 'rgba(15, 23, 42, 0.95)', color: 'white' }}
+                >
+                  <option value="ap-luc">📚 Áp lực học tập & Thi cử</option>
+                  <option value="tam-ly">🧠 Khủng hoảng tâm lý & Căng thẳng</option>
+                  <option value="bao-luc">🛡️ Báo cáo bạo lực học đường / Bắt nạt</option>
+                  <option value="khac">✨ Vấn đề khác</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label htmlFor="modal-room-desc">Mô tả ngắn gọn về tình trạng</label>
+                <textarea 
+                  id="modal-room-desc"
+                  className="text-input" 
+                  placeholder="Chia sẻ một chút thông tin để tham vấn viên nắm bắt tình trạng tốt hơn..."
+                  style={{ height: '90px', resize: 'none' }}
+                  value={roomDesc}
+                  onChange={(e) => setRoomDesc(e.target.value)}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="modal-btn cancel" onClick={onClose}>
+                  Hủy bỏ
+                </button>
+                <button type="submit" id="modal-submit-btn" className="modal-btn confirm">
+                  Khởi tạo phòng
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    // Modal to confirm room deletion
+    function DeleteConfirmModal({ roomId, roomName, onClose, onConfirm }) {
+      return (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-danger)', marginBottom: '8px' }}>
+              Xác nhận đóng phòng tư vấn?
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: 1.6 }}>
+              Hành động này sẽ đóng phòng chat <strong>"{roomName}"</strong> và xóa toàn bộ lịch sử trò chuyện của phòng này trong hệ thống. Thao tác này không thể hoàn tác.
+            </p>
+
+            <div className="modal-actions">
+              <button className="modal-btn cancel" onClick={onClose}>
+                Hủy bỏ
+              </button>
+              <button 
+                id="modal-delete-confirm-btn"
+                className="modal-btn danger" 
+                onClick={onConfirm}
+              >
+                Đóng & Xóa phòng
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Render App
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
