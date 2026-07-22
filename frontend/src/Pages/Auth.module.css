@@ -216,6 +216,17 @@
     cursor: pointer;
     transition: transform 0.18s, background 0.18s, box-shadow 0.18s;
 }
+.anonymousButton {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border-radius: 10px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.18s, background 0.18s, box-shadow 0.18s;
+}
 
 .primaryButton {
     border: 0;
@@ -236,15 +247,31 @@
     background: #ffffff;
     color: #374151;
 }
+.anonymousButton {
+    width: 100%;
+    margin-top: 12px;
+    border: 1.5px solid #d1d5db;
+    background: #ffffff;
+    color: #374151;
+}
 
 .googleButton:hover:not(:disabled) {
     transform: translateY(-1px);
     border-color: #e25b52;
     background: #fffafa;
 }
+.anonymousButton:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: #1e3c72;
+    background: #f5f8ff;
+}
 
 .primaryButton:disabled,
 .googleButton:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+.anonymousButton:disabled {
     opacity: 0.65;
     cursor: not-allowed;
 }

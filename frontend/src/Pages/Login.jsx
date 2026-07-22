@@ -6,6 +6,7 @@ import {
     browserSessionPersistence,
     signInWithEmailAndPassword,
     signInWithPopup,
+    signInAnonymously,
 } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -35,6 +36,7 @@ const Login = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
+    const [anonymousLoading, setAnonymousLoading] = useState(false);
     const navigate = useNavigate();
 
     const applyPersistence = () => setPersistence(
@@ -130,6 +132,40 @@ const Login = () => {
         }
     };
 
+    const handleAnonymousLogin = async () => {
+        setAnonymousLoading(true);
+        setError('');
+
+        try {
+            // Tài khoản khách chỉ tồn tại trong phiên trình duyệt hiện tại.
+            await setPersistence(auth, browserSessionPersistence);
+            const result = await signInAnonymously(auth);
+            const user = result.user;
+            const now = new Date().toISOString();
+            const userDocRef = doc(db, 'users', user.uid);
+
+            await setDoc(userDocRef, {
+                uid: user.uid,
+                displayName: 'Khách ẩn danh',
+                email: null,
+                role: 'anonymous',
+                avatarUrl: '',
+                is_Online: true,
+                is_active: true,
+                emailVerified: false,
+                is_anonymous: true,
+                createdAt: now,
+                lastLogin: now,
+            }, { merge: true });
+
+            navigate('/');
+        } catch (err) {
+            setError(getFirebaseErrorMessage(err.code));
+        } finally {
+            setAnonymousLoading(false);
+        }
+    };
+
     return (
         <main className={styles.authPage}>
             <div className={styles.backgroundShapeOne} />
@@ -219,6 +255,16 @@ const Login = () => {
                     <span className={styles.googleIcon}>G</span>
                     {googleLoading ? 'Đang kết nối...' : 'Đăng nhập với Google'}
                 </button>
+                <button
+                    type="button"
+                    className={styles.anonymousButton}
+                    onClick={handleAnonymousLogin}
+                    disabled={loading || googleLoading || anonymousLoading}
+                >
+                    <span aria-hidden="true">👤</span>
+                    {anonymousLoading ? 'Đang tạo phiên khách...' : 'Tiếp tục với tư cách khách'}
+                </button>
+
 
                 <p className={styles.authFooter}>
                     Chưa có tài khoản? <Link to="/register">Đăng ký</Link>
