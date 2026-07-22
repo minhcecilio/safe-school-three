@@ -22,12 +22,14 @@ export const AuthProvider = ({ children }) => {
                     setUser({
                         uid: firebaseUser.uid,
                         email: firebaseUser.email,
-                        displayName: userData?.DisplayName || firebaseUser.displayName || 'User',
-                        avatarUrl: userData?.avatarUrl || '',
+                        displayName: userData?.displayName || firebaseUser.displayName || 'User',
+                        avatarUrl: userData?.avatarUrl || firebaseUser.photoURL || '',
                         role: userData?.role || 'student',
                         isOnline: userData?.is_Online || false,
                         isActive: userData?.is_active || true,
+                        emailVerified: firebaseUser.emailVerified || false,
                         isAnonymous: userData?.is_anonymous || false,
+                        lastLogin: userData?.lastLogin || null,
                     });
                 } catch (error) {
                     console.error('Lỗi lấy user từ Firestore:', error);
@@ -36,7 +38,7 @@ export const AuthProvider = ({ children }) => {
                         uid: firebaseUser.uid,
                         email: firebaseUser.email,
                         displayName: firebaseUser.displayName || 'User',
-                        avatarUrl: '',
+                        avatarUrl: firebaseUser.photoURL || '',
                         role: 'student',
                     });
                 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { Link, useNavigate } from 'react-router-dom';
@@ -83,6 +83,9 @@ const Register = () => {
                 form.password
             );
             const user = userCredential.user;
+            
+            // Gửi email xác thực
+            await sendEmailVerification(user);
 
             // Cập nhật tên hiển thị trong Firebase Auth để Home có thể dùng ngay.
             await updateProfile(user, { displayName: form.fullname.trim() });
@@ -91,7 +94,6 @@ const Register = () => {
             await setDoc(doc(db, 'users', user.uid), {
                 uid: user.uid,
                 displayName: form.fullname.trim(),
-                DisplayName: form.fullname.trim(),
                 email: form.email.trim(),
                 role: form.role,
                 avatarUrl: '',
@@ -99,12 +101,14 @@ const Register = () => {
                 dob: '',
                 is_Online: true,
                 is_active: true,
+                emailVerified: false,
                 is_anonymous: false,
                 createdAt: serverTimestamp(),
+                lastLogin: null
             });
 
-            setSuccess('Đăng ký thành công. Bạn đang được chuyển đến trang chủ.');
-            window.setTimeout(() => navigate('/'), 900);
+            setSuccess('Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.');
+            window.setTimeout(() => navigate('/login'), 3000);
         } catch (err) {
             setError(getRegisterErrorMessage(err.code));
         } finally {
