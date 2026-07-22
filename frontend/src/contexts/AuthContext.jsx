@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -13,40 +13,63 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (firebaseUser) {
-                try {
-                    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-                    const userData = userDoc.data();
+        let unsubscribeDoc = null;
+        const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (unsubscribeDoc) {
+                unsubscribeDoc();
+                unsubscribeDoc = null;
+            }
 
-                    setUser({
-                        uid: firebaseUser.uid,
-                        email: firebaseUser.email,
-                        displayName: userData?.DisplayName || firebaseUser.displayName || 'User',
-                        avatarUrl: userData?.avatarUrl || '',
-                        role: userData?.role || 'student',
-                        isOnline: userData?.is_Online || false,
-                        isActive: userData?.is_active || true,
-                        isAnonymous: userData?.is_anonymous || false,
-                    });
-                } catch (error) {
-                    console.error('Lỗi lấy user từ Firestore:', error);
-                    // Set default user data
+            if (firebaseUser) {
+                // Listen to user document in real time
+                unsubscribeDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), (userDoc) => {
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        setUser({
+                            uid: firebaseUser.uid,
+                            email: firebaseUser.email,
+                            displayName: userData?.DisplayName || userData?.displayName || firebaseUser.displayName || 'User',
+                            avatarUrl: userData?.avatarUrl || '',
+                            role: userData?.role || 'student',
+                            isOnline: userData?.is_Online || false,
+                            isActive: userData?.is_active || true,
+                            isAnonymous: userData?.is_anonymous || false,
+                        });
+                    } else {
+                        // Fallback if firestore document doesn't exist yet
+                        setUser({
+                            uid: firebaseUser.uid,
+                            email: firebaseUser.email,
+                            displayName: firebaseUser.displayName || 'User',
+                            avatarUrl: firebaseUser.photoURL || '',
+                            role: 'student',
+                        });
+                    }
+                    setLoading(false);
+                }, (error) => {
+                    console.error('Lỗi lắng nghe document user:', error);
+                    // Fallback on error
                     setUser({
                         uid: firebaseUser.uid,
                         email: firebaseUser.email,
                         displayName: firebaseUser.displayName || 'User',
-                        avatarUrl: '',
+                        avatarUrl: firebaseUser.photoURL || '',
                         role: 'student',
                     });
-                }
+                    setLoading(false);
+                });
             } else {
                 setUser(null);
+                setLoading(false);
             }
-            setLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribeAuth();
+            if (unsubscribeDoc) {
+                unsubscribeDoc();
+            }
+        };
     }, []);
 
     const value = { user, loading };

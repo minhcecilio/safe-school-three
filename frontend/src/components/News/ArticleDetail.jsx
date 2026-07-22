@@ -267,10 +267,10 @@ export default function ArticleDetail() {
       <div className="article-reader-card">
         {/* Cover Image */}
         <div className="detail-cover-wrapper">
-          <img 
-            src={article.coverImage || defaultImage} 
-            alt={article.title} 
-            className="detail-cover-img" 
+          <img
+            src={article.coverImage || defaultImage}
+            alt={article.title}
+            className="detail-cover-img"
             onError={(e) => { e.target.src = defaultImage; }}
           />
           <span className="detail-category-badge">{article.category || 'Bài viết'}</span>
@@ -282,9 +282,9 @@ export default function ArticleDetail() {
 
           <div className="detail-author-row">
             <div className="author-box">
-              <img 
-                src={article.authorAvatar || defaultAvatar} 
-                alt={article.authorName} 
+              <img
+                src={article.authorAvatar || defaultAvatar}
+                alt={article.authorName}
                 className="author-avatar-md"
                 onError={(e) => { e.target.src = defaultAvatar; }}
               />
@@ -297,13 +297,13 @@ export default function ArticleDetail() {
             {/* Author / Admin Action Buttons */}
             {isAuthor && (
               <div className="author-controls">
-                <button 
+                <button
                   className="btn btn-secondary btn-sm"
                   onClick={() => navigate(`/articles/edit/${article.id}`)}
                 >
                   ✏️ Chỉnh sửa
                 </button>
-                <button 
+                <button
                   className="btn btn-danger-outline btn-sm"
                   onClick={() => setShowDeleteModal(true)}
                 >
@@ -364,22 +364,22 @@ export default function ArticleDetail() {
           </div>
 
           <div className="detail-action-buttons">
-            <button 
-              className={`action-btn like-btn ${isLiked ? 'active' : ''}`} 
+            <button
+              className={`action-btn like-btn ${isLiked ? 'active' : ''}`}
               onClick={handleLike}
             >
               {isLiked ? '❤️ Đã thích' : '🤍 Thích'} ({likesCount})
             </button>
 
-            <button 
-              className={`action-btn fav-btn ${isFavorite ? 'active' : ''}`} 
+            <button
+              className={`action-btn fav-btn ${isFavorite ? 'active' : ''}`}
               onClick={handleFavorite}
             >
               {isFavorite ? '⭐ Đã lưu' : '☆ Yêu thích'}
             </button>
 
-            <button 
-              className="action-btn share-btn" 
+            <button
+              className="action-btn share-btn"
               onClick={handleShare}
             >
               🔗 Chia sẻ
@@ -401,9 +401,9 @@ export default function ArticleDetail() {
         {/* Comment Form */}
         <form onSubmit={handleAddComment} className="comment-form">
           <div className="comment-input-row">
-            <img 
-              src={user?.avatarUrl || defaultAvatar} 
-              alt="User Avatar" 
+            <img
+              src={user?.avatarUrl || defaultAvatar}
+              alt="User Avatar"
               className="comment-user-avatar"
               onError={(e) => { e.target.src = defaultAvatar; }}
             />
@@ -417,8 +417,8 @@ export default function ArticleDetail() {
                 disabled={!user}
               />
               <div className="comment-form-actions">
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="btn btn-primary btn-sm"
                   disabled={!user || !newCommentText.trim() || submittingComment}
                 >
@@ -438,13 +438,13 @@ export default function ArticleDetail() {
           ) : (
             comments.map((cmt) => (
               <div key={cmt.id} className="comment-item">
-                <img 
-                  src={cmt.userAvatar || defaultAvatar} 
-                  alt={cmt.userName} 
+                <img
+                  src={cmt.userAvatar || defaultAvatar}
+                  alt={cmt.userName}
                   className="comment-avatar"
                   onError={(e) => { e.target.src = defaultAvatar; }}
                 />
-                
+
                 <div className="comment-content-wrapper">
                   <div className="comment-header">
                     <span className="comment-user-name">{cmt.userName || 'Thành viên'}</span>
@@ -453,20 +453,20 @@ export default function ArticleDetail() {
 
                   {editingCommentId === cmt.id ? (
                     <div className="edit-comment-box">
-                      <textarea 
+                      <textarea
                         className="comment-textarea edit-mode"
                         rows="2"
                         value={editingCommentText}
                         onChange={(e) => setEditingCommentText(e.target.value)}
                       />
                       <div className="edit-comment-actions">
-                        <button 
+                        <button
                           className="btn btn-primary btn-xs"
                           onClick={() => handleSaveEditComment(cmt.id)}
                         >
                           Lưu
                         </button>
-                        <button 
+                        <button
                           className="btn btn-secondary btn-xs"
                           onClick={() => { setEditingCommentId(null); setEditingCommentText(''); }}
                         >
@@ -481,14 +481,14 @@ export default function ArticleDetail() {
                   {/* Comment Owner Actions */}
                   {user && user.uid === cmt.userId && editingCommentId !== cmt.id && (
                     <div className="comment-actions">
-                      <button 
+                      <button
                         className="comment-action-link"
                         onClick={() => { setEditingCommentId(cmt.id); setEditingCommentText(cmt.content); }}
                       >
                         Sửa
                       </button>
                       <span className="dot-divider">•</span>
-                      <button 
+                      <button
                         className="comment-action-link text-danger"
                         onClick={() => handleDeleteComment(cmt.id)}
                       >

@@ -1,24 +1,37 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { signOut, updateProfile, deleteUser } from 'firebase/auth';
+import { auth, db } from '../firebase/config';
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
 import './Profile.css';
 
 export default function Profile() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user: currentUser, loading: authLoading } = useAuth();
 
-  // Mock user data initial state
+  const queryParams = new URLSearchParams(location.search);
+  const targetUid = queryParams.get('uid') || currentUser?.uid;
+  const isOwner = !queryParams.get('uid') || queryParams.get('uid') === currentUser?.uid;
+
+  const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+
+  // User data initial state
   const [userData, setUserData] = useState({
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80',
-    fullName: 'Nguyễn Văn A',
-    username: 'nguyenvana_student',
-    email: 'vana.nguyen@safeschool.edu.vn',
-    phone: '0987654321',
-    dob: '2010-05-15',
+    fullName: '',
+    email: '',
+    phone: '',
+    dob: '',
     gender: 'Nam',
-    address: '123 Đường Láng, Đống Đa, Hà Nội',
+    address: '',
     role: 'Học sinh',
-    createdAt: '15/09/2025'
+    createdAt: '',
+    hidePhone: false,
+    hideAddress: false
   });
 
   // Edit states
@@ -34,6 +47,93 @@ export default function Profile() {
     confirmPassword: ''
   });
   const [passwordErrors, setPasswordErrors] = useState({});
+
+  // Delete account states & refs
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const cancelBtnRef = useRef(null);
+
+  // Auto focus Cancel button when modal opens
+  useEffect(() => {
+    if (showDeleteModal && cancelBtnRef.current) {
+      cancelBtnRef.current.focus();
+    }
+  }, [showDeleteModal]);
+
+  // Escape key handler to close modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && showDeleteModal) {
+        setShowDeleteModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showDeleteModal]);
+
+  // Fetch user data from Firestore
+  useEffect(() => {
+    if (authLoading) return;
+    if (!targetUid) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchUserData = async () => {
+      try {
+        setLoading(true);
+        const userDoc = await getDoc(doc(db, 'users', targetUid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          const loadedData = {
+            avatar: data.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80',
+            fullName: data.DisplayName || data.displayName || 'Chưa đặt tên',
+            email: data.email || '',
+            phone: data.phone || '',
+            dob: data.dob || '',
+            gender: data.gender || 'Nam',
+            address: data.address || '',
+            role: data.role === 'teacher' ? 'Giáo viên' : data.role === 'parent' ? 'Phụ huynh' : data.role === 'psychologist' ? 'Chuyên gia' : 'Học sinh',
+            createdAt: data.createdAt
+              ? (data.createdAt.seconds
+                ? new Date(data.createdAt.seconds * 1000).toLocaleDateString('vi-VN')
+                : new Date().toLocaleDateString('vi-VN'))
+              : new Date().toLocaleDateString('vi-VN'),
+            hidePhone: data.hidePhone || false,
+            hideAddress: data.hideAddress || false
+          };
+          setUserData(loadedData);
+          setFormData(loadedData);
+        } else {
+          // Fallback if target user is current user
+          if (targetUid === currentUser?.uid) {
+            const loadedData = {
+              avatar: currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80',
+              fullName: currentUser.displayName || 'Chưa đặt tên',
+              email: currentUser.email || '',
+              phone: '',
+              dob: '',
+              gender: 'Nam',
+              address: '',
+              role: currentUser.role === 'teacher' ? 'Giáo viên' : currentUser.role === 'parent' ? 'Phụ huynh' : currentUser.role === 'psychologist' ? 'Chuyên gia' : 'Học sinh',
+              createdAt: new Date().toLocaleDateString('vi-VN'),
+              hidePhone: false,
+              hideAddress: false
+            };
+            setUserData(loadedData);
+            setFormData(loadedData);
+          } else {
+            alert('Không tìm thấy thông tin người dùng này trong hệ thống.');
+          }
+        }
+      } catch (error) {
+        console.error('Lỗi khi tải thông tin người dùng:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [targetUid, currentUser, authLoading]);
 
   // Input changes
   const handleInputChange = (e) => {
@@ -65,13 +165,47 @@ export default function Profile() {
     }
   };
 
+  const handlePrivacyToggle = (name) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: !prev[name]
+    }));
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check valid format (mime type and extension)
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    const validExtensions = ['jpeg', 'jpg', 'png', 'webp'];
+
+    if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+      alert('Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPG, JPEG, PNG, hoặc WEBP.');
+      return;
+    }
+
+    // Limit to 2MB to fit comfortably in Firestore
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Dung lượng ảnh vượt quá 2MB. Vui lòng chọn ảnh nhỏ hơn.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatarPreview(reader.result); // Base64 data URL
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Validation
   const validateForm = () => {
     const tempErrors = {};
     if (!formData.fullName.trim()) {
       tempErrors.fullName = 'Họ và tên không được để trống.';
     }
-    
+
     // Email regex
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email.trim()) {
@@ -111,18 +245,127 @@ export default function Profile() {
   };
 
   // Save changes
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
+    if (!isOwner) return;
+
     if (validateForm()) {
-      setUserData({ ...formData });
-      setIsEditing(false);
-      alert('Cập nhật thông tin tài khoản thành công!');
+      try {
+        setLoading(true);
+
+        // Build the payload with only modified fields
+        const updatePayload = {};
+
+        if (formData.fullName !== userData.fullName) {
+          updatePayload.displayName = formData.fullName;
+          updatePayload.DisplayName = formData.fullName;
+        }
+        if (formData.email !== userData.email) {
+          updatePayload.email = formData.email;
+        }
+        if (formData.phone !== userData.phone) {
+          updatePayload.phone = formData.phone;
+        }
+        if (formData.dob !== userData.dob) {
+          updatePayload.dob = formData.dob;
+        }
+        if (formData.gender !== userData.gender) {
+          updatePayload.gender = formData.gender;
+        }
+        if (formData.address !== userData.address) {
+          updatePayload.address = formData.address;
+        }
+        if (formData.hidePhone !== userData.hidePhone) {
+          updatePayload.hidePhone = formData.hidePhone;
+        }
+        if (formData.hideAddress !== userData.hideAddress) {
+          updatePayload.hideAddress = formData.hideAddress;
+        }
+
+        const newAvatar = avatarPreview || formData.avatar;
+        if (avatarPreview && avatarPreview !== userData.avatar) {
+          updatePayload.avatarUrl = avatarPreview;
+        }
+
+        const userRef = doc(db, 'users', currentUser.uid);
+        const userDoc = await getDoc(userRef);
+
+        if (userDoc.exists()) {
+          // Document exists: update only changed fields
+          if (Object.keys(updatePayload).length > 0) {
+            await updateDoc(userRef, updatePayload);
+
+            // Sync with firebase auth profile if display name or avatar changed
+            const authUpdate = {};
+            if (updatePayload.DisplayName) {
+              authUpdate.displayName = updatePayload.DisplayName;
+            }
+            if (updatePayload.avatarUrl) {
+              authUpdate.photoURL = updatePayload.avatarUrl;
+            }
+            if (Object.keys(authUpdate).length > 0) {
+              await updateProfile(auth.currentUser, authUpdate);
+            }
+          }
+        } else {
+          // Document does not exist: create it with setDoc using all profile data
+          const technicalRole =
+            userData.role === 'Giáo viên' ? 'teacher' :
+              userData.role === 'Phụ huynh' ? 'parent' :
+                userData.role === 'Chuyên gia' ? 'psychologist' :
+                  'student';
+
+          const initialData = {
+            uid: currentUser.uid,
+            email: formData.email || currentUser.email || '',
+            displayName: formData.fullName || currentUser.displayName || 'Chưa đặt tên',
+            DisplayName: formData.fullName || currentUser.displayName || 'Chưa đặt tên',
+            role: technicalRole,
+            avatarUrl: newAvatar || '',
+            phone: formData.phone || '',
+            dob: formData.dob || '',
+            gender: formData.gender || 'Nam',
+            address: formData.address || '',
+            is_Online: true,
+            is_active: true,
+            is_anonymous: false,
+            createdAt: serverTimestamp(),
+            hidePhone: formData.hidePhone || false,
+            hideAddress: formData.hideAddress || false
+          };
+
+          await setDoc(userRef, initialData);
+
+          // Also sync with firebase auth profile
+          await updateProfile(auth.currentUser, {
+            displayName: initialData.displayName,
+            photoURL: initialData.avatarUrl
+          });
+        }
+
+        const newUserData = {
+          ...userData,
+          ...formData,
+          avatar: newAvatar
+        };
+        setUserData(newUserData);
+        setFormData(newUserData);
+        setAvatarPreview(null);
+        setIsEditing(false);
+        alert('Cập nhật thông tin tài khoản thành công!');
+      } catch (error) {
+        console.error('Lỗi khi lưu thay đổi:', error);
+        alert(`Lỗi cập nhật: ${error.message || 'Vui lòng thử lại.'}`);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   // Cancel edit
   const handleCancel = () => {
     setFormData({ ...userData });
+    setAvatarPreview(null);
     setErrors({});
     setIsEditing(false);
   };
@@ -144,8 +387,6 @@ export default function Profile() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // Firebase onAuthStateChanged will set user to null automatically.
-      // Redirect to login page after successful sign-out.
       navigate('/login');
     } catch (error) {
       console.error('Lỗi đăng xuất:', error);
@@ -153,65 +394,123 @@ export default function Profile() {
     }
   };
 
-  // Simulating picture change
-  const handleAvatarChange = () => {
-    if (!isEditing) return;
-    const newUrl = prompt('Nhập URL ảnh mới (hoặc bấm Hủy để bỏ qua):', formData.avatar);
-    if (newUrl) {
-      setFormData({
-        ...formData,
-        avatar: newUrl
-      });
+  const handleDeleteAccount = async () => {
+    if (!isOwner) return;
+
+    try {
+      setLoading(true);
+      const user = auth.currentUser;
+      if (user) {
+        // Delete from Firestore
+        await deleteDoc(doc(db, 'users', user.uid));
+        // Delete from Auth
+        await deleteUser(user);
+
+        alert('Xóa tài khoản thành công!');
+        setShowDeleteModal(false);
+        navigate('/login');
+      }
+    } catch (error) {
+      console.error('Lỗi khi xóa tài khoản:', error);
+      if (error.code === 'auth/requires-recent-login') {
+        alert('Để bảo mật thông tin, bạn cần đăng nhập lại trước khi thực hiện hành động xóa tài khoản này.');
+      } else {
+        alert(`Lỗi xóa tài khoản: ${error.message || 'Vui lòng thử lại sau.'}`);
+      }
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Loading spinner
+  if (authLoading || (loading && !userData.fullName)) {
+    return (
+      <div className="profile-loading">
+        <div className="profile-spinner"></div>
+        <p>Đang tải dữ liệu hồ sơ...</p>
+      </div>
+    );
+  }
+
+  // Value masking for private info when viewed by others
+  const displayPhone = isOwner
+    ? (isEditing ? formData.phone : userData.phone)
+    : (userData.hidePhone ? '****** (Đã ẩn)' : userData.phone);
+
+  const displayAddress = isOwner
+    ? (isEditing ? formData.address : userData.address)
+    : (userData.hideAddress ? '****** (Đã ẩn)' : userData.address);
 
   return (
     <div className="profile-page fade-in">
       <div className="container profile-container">
-        
+
+        {/* Hidden File Input for Avatar Picker */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          accept="image/png, image/jpeg, image/jpg, image/webp"
+          onChange={handleFileChange}
+        />
+
         {/* Profile Card Header */}
         <div className="profile-header-card">
           <div className="profile-header-visual">
-            <div className={`profile-avatar-wrapper ${isEditing ? 'editable' : ''}`} onClick={handleAvatarChange}>
-              <img src={isEditing ? formData.avatar : userData.avatar} alt="User Avatar" className="profile-avatar-img" />
+            <div
+              className={`profile-avatar-wrapper ${isEditing ? 'editable' : ''}`}
+              onClick={() => isEditing && fileInputRef.current.click()}
+              title={isEditing ? 'Nhấn để chọn ảnh mới' : ''}
+            >
+              <img
+                src={avatarPreview || (isEditing ? formData.avatar : userData.avatar)}
+                alt="User Avatar"
+                className="profile-avatar-img"
+              />
               {isEditing && (
                 <div className="avatar-edit-overlay">
                   <span>Thay đổi ảnh</span>
                 </div>
               )}
             </div>
+
             <div className="profile-header-info">
-              <h2 className="profile-name">{userData.fullName}</h2>
+              <h2 className="profile-name">{userData.fullName || 'Chưa đặt tên'}</h2>
               <span className="profile-role-badge">🏷️ {userData.role}</span>
               <p className="profile-meta-text">Tài khoản được tạo ngày: {userData.createdAt}</p>
+
+
             </div>
           </div>
+
           <div className="profile-header-actions">
-            {!isEditing ? (
-              <button className="btn btn-primary" onClick={() => setIsEditing(true)}>
-                ✍️ Chỉnh sửa thông tin
-              </button>
-            ) : (
-              <div className="edit-actions-group">
-                <button className="btn btn-success" onClick={handleSave}>
-                  💾 Lưu thay đổi
+            {isOwner && (
+              !isEditing ? (
+                <button className="btn btn-primary" onClick={() => setIsEditing(true)}>
+                  ✍️ Chỉnh sửa thông tin
                 </button>
-                <button className="btn btn-secondary" onClick={handleCancel}>
-                  Hủy
-                </button>
-              </div>
+              ) : (
+                <div className="edit-actions-group">
+                  <button className="btn btn-success" onClick={handleSave}>
+                    💾 Lưu thay đổi
+                  </button>
+                  <button className="btn btn-secondary" onClick={handleCancel}>
+                    Hủy
+                  </button>
+                </div>
+              )
             )}
           </div>
         </div>
 
         {/* Profile Main Content Grid */}
-        <div className="profile-grid">
+        <div className={`profile-grid ${!isOwner ? 'single-column' : ''}`}>
           {/* Details Section */}
           <div className="profile-details-card">
             <h3 className="card-title">Thông Tin Cá Nhân</h3>
             <form onSubmit={handleSave} className="profile-form">
               <div className="form-grid">
-                
+
                 {/* Fullname */}
                 <div className="form-group">
                   <label className="form-label" htmlFor="fullName">Họ và tên</label>
@@ -223,22 +522,9 @@ export default function Profile() {
                     value={isEditing ? formData.fullName : userData.fullName}
                     onChange={handleInputChange}
                     disabled={!isEditing}
+                    placeholder="Nhập họ và tên"
                   />
                   {errors.fullName && <span className="error-message">{errors.fullName}</span>}
-                </div>
-
-                {/* Username (Read Only) */}
-                <div className="form-group">
-                  <label className="form-label" htmlFor="username">Tên đăng nhập</label>
-                  <input
-                    type="text"
-                    id="username"
-                    name="username"
-                    className="form-input disabled"
-                    value={userData.username}
-                    disabled
-                  />
-                  <span className="input-hint">Tên đăng nhập được khởi tạo mặc định và không thể thay đổi</span>
                 </div>
 
                 {/* Email */}
@@ -252,21 +538,45 @@ export default function Profile() {
                     value={isEditing ? formData.email : userData.email}
                     onChange={handleInputChange}
                     disabled={!isEditing}
+                    placeholder="yourname@safeschool.edu.vn"
                   />
                   {errors.email && <span className="error-message">{errors.email}</span>}
                 </div>
 
                 {/* Phone */}
                 <div className="form-group">
-                  <label className="form-label" htmlFor="phone">Số điện thoại</label>
+                  <div className="form-label-row">
+                    <label className="form-label" htmlFor="phone">Số điện thoại</label>
+                    {isOwner && (
+                      <div className="privacy-toggle-container">
+                        <label className="switch-wrapper">
+                          <input
+                            type="checkbox"
+                            name="hidePhone"
+                            checked={isEditing ? formData.hidePhone : userData.hidePhone}
+                            onChange={() => isEditing && handlePrivacyToggle('hidePhone')}
+                            disabled={!isEditing}
+                          />
+                          <span className="switch-slider"></span>
+                        </label>
+                        <span className="switch-text">
+                          {isEditing
+                            ? (formData.hidePhone ? '🔒 Ẩn' : '🔓 Hiện')
+                            : (userData.hidePhone ? '🔒 Đang ẩn' : '🔓 Đang công khai')
+                          }
+                        </span>
+                      </div>
+                    )}
+                  </div>
                   <input
                     type="text"
                     id="phone"
                     name="phone"
                     className={`form-input ${errors.phone ? 'input-error' : ''}`}
-                    value={isEditing ? formData.phone : userData.phone}
+                    value={displayPhone}
                     onChange={handleInputChange}
                     disabled={!isEditing}
+                    placeholder="Nhập số điện thoại (10 chữ số)"
                   />
                   {errors.phone && <span className="error-message">{errors.phone}</span>}
                 </div>
@@ -302,20 +612,6 @@ export default function Profile() {
                   </select>
                 </div>
 
-                {/* Address */}
-                <div className="form-group span-full">
-                  <label className="form-label" htmlFor="address">Địa chỉ thường trú</label>
-                  <input
-                    type="text"
-                    id="address"
-                    name="address"
-                    className="form-input"
-                    value={isEditing ? formData.address : userData.address}
-                    onChange={handleInputChange}
-                    disabled={!isEditing}
-                  />
-                </div>
-
                 {/* Role (Read Only) */}
                 <div className="form-group">
                   <label className="form-label" htmlFor="role">Vai trò</label>
@@ -329,8 +625,45 @@ export default function Profile() {
                   />
                 </div>
 
+                {/* Address */}
+                <div className="form-group span-full">
+                  <div className="form-label-row">
+                    <label className="form-label" htmlFor="address">Địa chỉ thường trú</label>
+                    {isOwner && (
+                      <div className="privacy-toggle-container">
+                        <label className="switch-wrapper">
+                          <input
+                            type="checkbox"
+                            name="hideAddress"
+                            checked={isEditing ? formData.hideAddress : userData.hideAddress}
+                            onChange={() => isEditing && handlePrivacyToggle('hideAddress')}
+                            disabled={!isEditing}
+                          />
+                          <span className="switch-slider"></span>
+                        </label>
+                        <span className="switch-text">
+                          {isEditing
+                            ? (formData.hideAddress ? '🔒 Ẩn' : '🔓 Hiện')
+                            : (userData.hideAddress ? '🔒 Đang ẩn' : '🔓 Đang công khai')
+                          }
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    id="address"
+                    name="address"
+                    className="form-input"
+                    value={displayAddress}
+                    onChange={handleInputChange}
+                    disabled={!isEditing}
+                    placeholder="Nhập địa chỉ thường trú"
+                  />
+                </div>
+
                 {/* Account Created Date (Read Only) */}
-                <div className="form-group">
+                <div className="form-group span-full">
                   <label className="form-label" htmlFor="createdAt">Ngày tham gia</label>
                   <input
                     type="text"
@@ -347,82 +680,131 @@ export default function Profile() {
           </div>
 
           {/* Account Settings / Actions Section */}
-          <div className="profile-settings-card">
-            <h3 className="card-title">Cài Đặt Tài Khoản</h3>
-            <div className="settings-buttons">
-              
-              {/* Toggle Change Password Section */}
-              <button 
-                className={`settings-btn ${showPasswordSection ? 'active' : ''}`}
-                onClick={() => setShowPasswordSection(!showPasswordSection)}
-              >
-                <span className="btn-label">🔒 Đổi mật khẩu đăng nhập</span>
-                <svg className={`chevron-icon ${showPasswordSection ? 'rotate' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+          {isOwner && (
+            <div className="profile-settings-card">
+              <h3 className="card-title">Cài Đặt Tài Khoản</h3>
+              <div className="settings-buttons">
 
-              {/* Password Section */}
-              {showPasswordSection && (
-                <form onSubmit={handleSavePassword} className="password-form fade-in">
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="currentPassword">Mật khẩu hiện tại</label>
-                    <input
-                      type="password"
-                      id="currentPassword"
-                      name="currentPassword"
-                      className={`form-input ${passwordErrors.currentPassword ? 'input-error' : ''}`}
-                      value={passwordForm.currentPassword}
-                      onChange={handlePasswordChange}
-                    />
-                    {passwordErrors.currentPassword && <span className="error-message">{passwordErrors.currentPassword}</span>}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="newPassword">Mật khẩu mới</label>
-                    <input
-                      type="password"
-                      id="newPassword"
-                      name="newPassword"
-                      className={`form-input ${passwordErrors.newPassword ? 'input-error' : ''}`}
-                      value={passwordForm.newPassword}
-                      onChange={handlePasswordChange}
-                    />
-                    {passwordErrors.newPassword && <span className="error-message">{passwordErrors.newPassword}</span>}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="confirmPassword">Xác nhận mật khẩu mới</label>
-                    <input
-                      type="password"
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      className={`form-input ${passwordErrors.confirmPassword ? 'input-error' : ''}`}
-                      value={passwordForm.confirmPassword}
-                      onChange={handlePasswordChange}
-                    />
-                    {passwordErrors.confirmPassword && <span className="error-message">{passwordErrors.confirmPassword}</span>}
-                  </div>
-                  <div className="password-actions">
-                    <button type="submit" className="btn btn-primary btn-sm">
-                      Lưu mật khẩu mới
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              <hr className="settings-divider" />
-
-              {/* Log out option */}
-              <button className="settings-btn logout-btn" onClick={handleLogout}>
-                <span className="btn-label text-danger-heavy">
-                  <svg className="btn-icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                {/* Toggle Change Password Section */}
+                <button
+                  className={`settings-btn ${showPasswordSection ? 'active' : ''}`}
+                  onClick={() => setShowPasswordSection(!showPasswordSection)}
+                >
+                  <span className="btn-label">🔒 Đổi mật khẩu đăng nhập</span>
+                  <svg className={`chevron-icon ${showPasswordSection ? 'rotate' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
-                  Đăng xuất tài khoản
-                </span>
-              </button>
+                </button>
+
+                {/* Password Section */}
+                {showPasswordSection && (
+                  <form onSubmit={handleSavePassword} className="password-form fade-in">
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="currentPassword">Mật khẩu hiện tại</label>
+                      <input
+                        type="password"
+                        id="currentPassword"
+                        name="currentPassword"
+                        className={`form-input ${passwordErrors.currentPassword ? 'input-error' : ''}`}
+                        value={passwordForm.currentPassword}
+                        onChange={handlePasswordChange}
+                      />
+                      {passwordErrors.currentPassword && <span className="error-message">{passwordErrors.currentPassword}</span>}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="newPassword">Mật khẩu mới</label>
+                      <input
+                        type="password"
+                        id="newPassword"
+                        name="newPassword"
+                        className={`form-input ${passwordErrors.newPassword ? 'input-error' : ''}`}
+                        value={passwordForm.newPassword}
+                        onChange={handlePasswordChange}
+                      />
+                      {passwordErrors.newPassword && <span className="error-message">{passwordErrors.newPassword}</span>}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="confirmPassword">Xác nhận mật khẩu mới</label>
+                      <input
+                        type="password"
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        className={`form-input ${passwordErrors.confirmPassword ? 'input-error' : ''}`}
+                        value={passwordForm.confirmPassword}
+                        onChange={handlePasswordChange}
+                      />
+                      {passwordErrors.confirmPassword && <span className="error-message">{passwordErrors.confirmPassword}</span>}
+                    </div>
+                    <div className="password-actions">
+                      <button type="submit" className="btn btn-primary btn-sm">
+                        Lưu mật khẩu mới
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                <hr className="settings-divider" />
+
+                {/* Log out option */}
+                <button className="settings-btn logout-btn" onClick={handleLogout}>
+                  <span className="btn-label text-danger-heavy">
+                    <svg className="btn-icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Đăng xuất tài khoản
+                  </span>
+                </button>
+
+                {/* Delete Account option */}
+                <button className="settings-btn delete-account-btn" onClick={() => setShowDeleteModal(true)}>
+                  <span className="btn-label text-danger-heavy">
+                    <svg className="btn-icon-delete" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Xóa tài khoản
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Delete Account Confirmation Modal */}
+        {showDeleteModal && (
+          <div className="modal-backdrop fade-in" onClick={() => setShowDeleteModal(false)}>
+            <div className="modal-content scale-up" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">⚠️ Xóa tài khoản</h3>
+                <button className="modal-close-btn" onClick={() => setShowDeleteModal(false)} aria-label="Đóng">
+                  &times;
+                </button>
+              </div>
+              <div className="modal-body">
+                <p>Bạn có chắc chắn muốn xóa tài khoản này?</p>
+                <p className="modal-warning-text">
+                  Hành động này có thể không thể hoàn tác và bạn sẽ mất quyền truy cập vào tài khoản cũng như dữ liệu liên quan.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  ref={cancelBtnRef}
+                  onClick={() => setShowDeleteModal(false)}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger-action"
+                  onClick={handleDeleteAccount}
+                >
+                  Xóa tài khoản
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
       </div>
     </div>

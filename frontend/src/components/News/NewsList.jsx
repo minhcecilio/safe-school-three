@@ -80,8 +80,8 @@ export default function NewsList() {
             Cập nhật những thông tin, kiến thức và kỹ năng sống bổ ích dành cho học sinh, phụ huynh và nhà trường.
           </p>
         </div>
-        
-        <button 
+
+        <button
           className="btn btn-primary btn-create-post"
           onClick={() => {
             if (user) {
@@ -123,7 +123,7 @@ export default function NewsList() {
         {/* Sort Dropdown */}
         <div className="sort-wrapper">
           <label className="sort-label">Sắp xếp:</label>
-          <select 
+          <select
             className="sort-select"
             value={selectedSort}
             onChange={(e) => setSelectedSort(e.target.value)}
@@ -181,7 +181,7 @@ export default function NewsList() {
           {/* Load More Button */}
           {displayCount < articles.length && (
             <div className="load-more-container">
-              <button 
+              <button
                 className="btn btn-secondary load-more-btn"
                 onClick={() => setDisplayCount(prev => prev + 6)}
               >
