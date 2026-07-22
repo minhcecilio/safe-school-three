@@ -38,7 +38,6 @@ export default function ProtectedRoute({ children }) {
   }
 
   if (!user) {
-    // Redirect to login if user not authenticated
     return <Navigate to="/login" replace />;
   }
 

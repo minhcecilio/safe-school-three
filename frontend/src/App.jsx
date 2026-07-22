@@ -4,6 +4,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/Common/ProtectedRoute';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
+
+// User Pages
 import Home from './Pages/Home';
 import News from './Pages/News';
 import CreatePost from './Pages/CreatePost';
@@ -13,23 +15,24 @@ import Chat from './Pages/Chat';
 import Login from './Pages/Login';
 import Register from './Pages/Register';
 
-// Routes that should NOT show the main Header/Footer chrome
+// Admin Layout & Pages
+import AdminLayout from './components/Layout/AdminLayout';
+import Dashboard from './Pages/admin/Dashboard';
+import ManageUsers from './Pages/admin/ManageUsers';
+import ManagePosts from './Pages/admin/ManagePosts';
+import ManageReports from './Pages/admin/ManageReports';
+
+// Routes that should NOT show the main public Header/Footer chrome
 const NO_CHROME_ROUTES = ['/register', '/login'];
 
 function NotificationsPlaceholder() {
   return (
     <div style={{ padding: '120px 24px 80px', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
       <div style={{ maxWidth: '600px', width: '100%' }}>
-        <h1 style={{ fontSize: '2.5rem', marginBottom: '16px', color: 'var(--primary-dark)' }}>Thông báo</h1>
-        <p style={{ color: 'var(--gray-text)', fontSize: '1.1rem', marginBottom: '24px' }}>
-          Xem các thông báo mới nhất từ ban giám hiệu và hệ thống Safe School.
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '16px', color: '#1e3c72' }}>Thông báo</h1>
+        <p style={{ color: '#64748b', fontSize: '1.1rem', marginBottom: '24px' }}>
+          Xem các thông báo mới nhất từ ban giám hiệu và hệ thống SafeSchool.
         </p>
-        <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FEF3C7', color: '#B45309', padding: '24px', borderRadius: 'var(--border-radius-md)', textAlign: 'left', boxShadow: 'var(--shadow-md)' }}>
-          <h3 style={{ marginBottom: '8px', color: '#92400E' }}>⚠️ Lưu ý hệ thống:</h3>
-          <p style={{ fontSize: '0.95rem', lineHeight: '1.5' }}>
-            Trang <strong>Thông báo (Route: /notifications)</strong> chưa được tạo trong dự án. Vui lòng bổ sung <code>src/Pages/Notifications.jsx</code>.
-          </p>
-        </div>
       </div>
     </div>
   );
@@ -39,40 +42,36 @@ function ConsultationPlaceholder() {
   return (
     <div style={{ padding: '120px 24px 80px', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
       <div style={{ maxWidth: '600px', width: '100%' }}>
-        <h1 style={{ fontSize: '2.5rem', marginBottom: '16px', color: 'var(--primary-dark)' }}>Đặt Lịch Tham Vấn</h1>
-        <p style={{ color: 'var(--gray-text)', fontSize: '1.1rem', marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '16px', color: '#1e3c72' }}>Đặt Lịch Tham Vấn</h1>
+        <p style={{ color: '#64748b', fontSize: '1.1rem', marginBottom: '24px' }}>
           Đặt lịch trao đổi trực tiếp, bảo mật với các chuyên gia tâm lý học đường.
         </p>
-        <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FEF3C7', color: '#B45309', padding: '24px', borderRadius: 'var(--border-radius-md)', textAlign: 'left', boxShadow: 'var(--shadow-md)' }}>
-          <h3 style={{ marginBottom: '8px', color: '#92400E' }}>⚠️ Lưu ý hệ thống:</h3>
-          <p style={{ fontSize: '0.95rem', lineHeight: '1.5' }}>
-            Trang <strong>Đặt lịch tham vấn (Route: /consultation)</strong> chưa được tạo trong dự án. Vui lòng bổ sung <code>src/Pages/Consultation.jsx</code>.
-          </p>
-        </div>
       </div>
     </div>
   );
 }
 
-// Inner shell — reads current path to decide whether to show Header/Footer
+// Inner shell — reads current path to decide whether to show public Header/Footer
 function AppShell() {
   const { pathname } = useLocation();
-  const showChrome = !NO_CHROME_ROUTES.includes(pathname);
+
+  // Không hiển thị Header/Footer công khai nếu ở trang đăng nhập, đăng ký hoặc trong Admin Panel
+  const isNoChrome = NO_CHROME_ROUTES.includes(pathname) || pathname.startsWith('/admin');
 
   return (
     <>
-      {showChrome && <Header />}
+      {!isNoChrome && <Header />}
 
       <main className="app-main" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <Routes>
-          {/* Public Routes */}
+          {/* Public User Routes */}
           <Route path="/" element={<Home />} />
           <Route path="/articles" element={<News />} />
           <Route path="/articles/:id" element={<News />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Protected Routes */}
+          {/* Protected User Routes */}
           <Route path="/articles/create" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
           <Route path="/articles/edit/:id" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Report /></ProtectedRoute>} />
@@ -83,12 +82,27 @@ function AppShell() {
           <Route path="/notifications" element={<NotificationsPlaceholder />} />
           <Route path="/consultation" element={<ConsultationPlaceholder />} />
 
+          {/* Protected Admin Routes */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="users" element={<ManageUsers />} />
+            <Route path="posts" element={<ManagePosts />} />
+            <Route path="reports" element={<ManageReports />} />
+          </Route>
+
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
-      {showChrome && <Footer />}
+      {!isNoChrome && <Footer />}
     </>
   );
 }

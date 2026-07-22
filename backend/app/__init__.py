@@ -1,0 +1,3 @@
+"""
+SafeSchool Backend Application Package
+"""
