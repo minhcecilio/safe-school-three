@@ -6,6 +6,7 @@ import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
 import Home from './Pages/Home';
 import News from './Pages/News';
+import CreatePost from './Pages/CreatePost';
 import Report from './Pages/Report';
 import Profile from './Pages/Profile';
 import Chat from './Pages/Chat';
@@ -64,13 +65,16 @@ function AppShell() {
 
       <main className="app-main" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <Routes>
-          {/* Public */}
+          {/* Public Routes */}
           <Route path="/" element={<Home />} />
           <Route path="/articles" element={<News />} />
+          <Route path="/articles/:id" element={<News />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Protected */}
+          {/* Protected Routes */}
+          <Route path="/articles/create" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
+          <Route path="/articles/edit/:id" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Report /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
