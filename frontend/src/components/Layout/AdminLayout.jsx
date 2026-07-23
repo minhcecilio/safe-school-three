@@ -36,6 +36,7 @@ const AdminLayout = () => {
     { path: '/admin/users', label: 'Quản lý Users', icon: '👥' },
     { path: '/admin/posts', label: 'Quản lý Bài viết', icon: '📰' },
     { path: '/admin/reports', label: 'Quản lý Báo cáo', icon: '📋' },
+    { path: '/admin/chat', label: 'Quản lý Phòng Chat', icon: '💬' },
   ];
 
   const handleLogout = async () => {
