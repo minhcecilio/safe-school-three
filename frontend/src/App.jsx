@@ -21,6 +21,7 @@ import Dashboard from './Pages/admin/Dashboard';
 import ManageUsers from './Pages/admin/ManageUsers';
 import ManagePosts from './Pages/admin/ManagePosts';
 import ManageReports from './Pages/admin/ManageReports';
+import ManageChat from './Pages/admin/ManageChat';
 
 // Routes that should NOT show the main public Header/Footer chrome
 const NO_CHROME_ROUTES = ['/register', '/login'];
@@ -95,6 +96,7 @@ function AppShell() {
             <Route path="users" element={<ManageUsers />} />
             <Route path="posts" element={<ManagePosts />} />
             <Route path="reports" element={<ManageReports />} />
+            <Route path="chat" element={<ManageChat />} />
           </Route>
 
           {/* Catch-all */}
