@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { getArticlesService } from '../../services/articleService';
+import { db } from '../../firebase/config';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import NewsCard from './NewsCard';
 import './NewsList.css';
 
@@ -23,7 +24,11 @@ const SORT_OPTIONS = [
 
 export default function NewsList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+
+  const queryParams = new URLSearchParams(location.search);
+  const showFavorites = queryParams.get('filter') === 'favorites';
 
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,70 +36,215 @@ export default function NewsList() {
 
   // Filters & Pagination State
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [selectedSort, setSelectedSort] = useState('newest');
   const [displayCount, setDisplayCount] = useState(6);
 
-  // Fetch articles from Firestore
-  useEffect(() => {
-    fetchArticles();
-  }, [selectedCategory, selectedSort]);
+  // Stats for favorites view
+  const [favStats, setFavStats] = useState({ totalLikes: 0, totalFavs: 0 });
 
-  const fetchArticles = async () => {
+  // Fetch articles from Firestore in real-time
+  useEffect(() => {
     setLoading(true);
     setError(null);
-    try {
-      const data = await getArticlesService({
-        category: selectedCategory,
-        sortBy: selectedSort,
-        search: searchQuery
+    
+    let unsubscribeArticles = null;
+    let unsubscribeFavorites = null;
+
+    if (showFavorites) {
+      if (!user) {
+        setArticles([]);
+        setLoading(false);
+        return;
+      }
+
+      // 1. Listen to 'fav' collection for this user in real-time
+      const favQuery = query(collection(db, 'fav'), where('userId', '==', user.uid));
+      unsubscribeFavorites = onSnapshot(favQuery, (favSnap) => {
+        const favoriteIds = favSnap.docs.map(d => d.data().articleId);
+        
+        if (favoriteIds.length === 0) {
+          setArticles([]);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Listen to active articles collection
+        const articlesQuery = query(collection(db, 'articles'), where('isDeleted', '!=', true));
+        if (unsubscribeArticles) unsubscribeArticles();
+        
+        unsubscribeArticles = onSnapshot(articlesQuery, (artSnap) => {
+          let favArticles = artSnap.docs
+            .map(docSnap => {
+              const data = docSnap.data();
+              return {
+                id: docSnap.id,
+                ...data,
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
+                updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt || new Date().toISOString(),
+              };
+            })
+            .filter(a => favoriteIds.includes(a.id));
+
+          // Client-side filtering & sorting
+          if (selectedCategory && selectedCategory !== 'Tất cả') {
+            favArticles = favArticles.filter(a => a.category === selectedCategory);
+          }
+          if (activeSearchQuery && activeSearchQuery.trim() !== '') {
+            const term = activeSearchQuery.toLowerCase().trim();
+            favArticles = favArticles.filter(a => 
+              (a.title && a.title.toLowerCase().includes(term)) ||
+              (a.summary && a.summary.toLowerCase().includes(term)) ||
+              (a.content && a.content.toLowerCase().includes(term))
+            );
+          }
+          if (selectedSort === 'newest') {
+            favArticles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          } else if (selectedSort === 'oldest') {
+            favArticles.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          } else if (selectedSort === 'views') {
+            favArticles.sort((a, b) => (b.views || 0) - (a.views || 0));
+          } else if (selectedSort === 'likes') {
+            favArticles.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+          }
+
+          setArticles(favArticles);
+          setLoading(false);
+        }, (err) => {
+          console.error("Error listening to articles:", err);
+          setError("Không thể tải danh sách bài viết từ hệ thống.");
+          setLoading(false);
+        });
+      }, (err) => {
+        console.error("Error listening to favorites:", err);
+        setError("Không thể tải danh sách yêu thích.");
+        setLoading(false);
       });
-      setArticles(data);
-    } catch (err) {
-      console.error('Lỗi lấy danh sách bài viết:', err);
-      setError('Không thể tải danh sách bài viết từ hệ thống.');
-    } finally {
-      setLoading(false);
+
+    } else {
+      // Normal articles list in real-time
+      const articlesQuery = query(collection(db, 'articles'), where('isDeleted', '!=', true));
+      unsubscribeArticles = onSnapshot(articlesQuery, (artSnap) => {
+        let allArticles = artSnap.docs.map(docSnap => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt || new Date().toISOString(),
+          };
+        });
+
+        // Client-side filtering & sorting
+        if (selectedCategory && selectedCategory !== 'Tất cả') {
+          allArticles = allArticles.filter(a => a.category === selectedCategory);
+        }
+        if (activeSearchQuery && activeSearchQuery.trim() !== '') {
+          const term = activeSearchQuery.toLowerCase().trim();
+          allArticles = allArticles.filter(a => 
+            (a.title && a.title.toLowerCase().includes(term)) ||
+            (a.summary && a.summary.toLowerCase().includes(term)) ||
+            (a.content && a.content.toLowerCase().includes(term))
+          );
+        }
+        if (selectedSort === 'newest') {
+          allArticles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        } else if (selectedSort === 'oldest') {
+          allArticles.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        } else if (selectedSort === 'views') {
+          allArticles.sort((a, b) => (b.views || 0) - (a.views || 0));
+        } else if (selectedSort === 'likes') {
+          allArticles.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+        }
+
+        setArticles(allArticles);
+        setLoading(false);
+      }, (err) => {
+        console.error("Error listening to articles:", err);
+        setError("Không thể tải danh sách bài viết từ hệ thống.");
+        setLoading(false);
+      });
     }
-  };
+
+    return () => {
+      if (unsubscribeArticles) unsubscribeArticles();
+      if (unsubscribeFavorites) unsubscribeFavorites();
+    };
+  }, [selectedCategory, selectedSort, showFavorites, user, activeSearchQuery]);
+
+  // Compute favorites page stats when articles change
+  useEffect(() => {
+    if (!showFavorites || articles.length === 0) {
+      setFavStats({ totalLikes: 0, totalFavs: 0 });
+      return;
+    }
+    const totalLikes = articles.reduce((s, a) => s + (a.likes || 0), 0);
+    const articleIds = articles.map(a => a.id).slice(0, 30);
+    const q = query(collection(db, 'fav'), where('articleId', 'in', articleIds));
+    const unsub = onSnapshot(q, (snap) => {
+      setFavStats({ totalLikes, totalFavs: snap.size });
+    }, err => console.error('FavStats snapshot error:', err));
+    return () => unsub();
+  }, [showFavorites, articles]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchArticles();
+    setActiveSearchQuery(searchQuery);
   };
 
   const handleClearSearch = () => {
     setSearchQuery('');
-    fetchArticles();
+    setActiveSearchQuery('');
   };
 
   const visibleArticles = articles.slice(0, displayCount);
+
 
   return (
     <div className="news-list-container">
       {/* Header Bar */}
       <div className="news-header-bar">
         <div>
-          <h1 className="page-title">Bài Viết & Tin Tức Học Đường</h1>
+          <h1 className="page-title">
+            {showFavorites ? 'Bài viết yêu thích' : 'Bài viết & Tin Tức Học Đường'}
+          </h1>
           <p className="page-subtitle">
-            Cập nhật những thông tin, kiến thức và kỹ năng sống bổ ích dành cho học sinh, phụ huynh và nhà trường.
+            {showFavorites
+              ? 'Danh sách những bài viết bạn đã lưu và yêu thích trên hệ thống SafeSchool.'
+              : 'Cập nhật những thông tin, kiến thức và kỹ năng sống bổ ích dành cho học sinh, phụ huynh và nhà trường.'}
           </p>
         </div>
 
-        <button
-          className="btn btn-primary btn-create-post"
-          onClick={() => {
-            if (user) {
-              navigate('/articles/create');
-            } else {
-              alert('Vui lòng đăng nhập để tạo bài viết mới.');
-              navigate('/login');
-            }
-          }}
-        >
-          ➕ Tạo bài viết mới
-        </button>
+        {!showFavorites && (
+          <button
+            className="btn btn-primary btn-create-post"
+            onClick={() => {
+              if (user) {
+                navigate('/articles/create');
+              } else {
+                alert('Vui lòng đăng nhập để tạo bài viết mới.');
+                navigate('/login');
+              }
+            }}
+          >
+            ➕ Tạo bài viết mới
+          </button>
+        )}
       </div>
+
+
+      {/* Stats bar for favorites view */}
+      {showFavorites && articles.length > 0 && (
+        <div className="fav-stats-bar">
+          <span className="fav-stat-item">
+            👍 <strong>{favStats.totalLikes.toLocaleString('vi-VN')}</strong> lượt thích tổng cộng
+          </span>
+          <span className="fav-stat-item">
+            ❤️ <strong>{favStats.totalFavs.toLocaleString('vi-VN')}</strong> lượt yêu thích nhận được
+          </span>
+        </div>
+      )}
 
       {/* Toolbar & Filters */}
       <div className="news-filter-toolbar">
@@ -157,14 +307,14 @@ export default function NewsList() {
       ) : error ? (
         <div className="news-error-state">
           <p>{error}</p>
-          <button className="btn btn-secondary" onClick={fetchArticles}>Thử lại</button>
+          <button className="btn btn-secondary" onClick={() => navigate(0)}>Thử lại</button>
         </div>
       ) : visibleArticles.length === 0 ? (
         <div className="news-empty-state">
           <span className="empty-icon">📂</span>
           <h3>Chưa có bài viết nào</h3>
           <p>Không tìm thấy bài viết nào phù hợp với bộ lọc hoặc tìm kiếm hiện tại.</p>
-          {user && (
+          {user && !showFavorites && (
             <button className="btn btn-primary" onClick={() => navigate('/articles/create')}>
               Hãy là người đầu tiên viết bài
             </button>
@@ -194,3 +344,4 @@ export default function NewsList() {
     </div>
   );
 }
+

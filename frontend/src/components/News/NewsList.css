@@ -38,6 +38,29 @@
   padding: 12px 24px;
 }
 
+/* Favorites Stats Bar */
+.fav-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  background: linear-gradient(135deg, #f0f9ff 0%, #fef3f2 100%);
+  border: 1px solid var(--gray-medium);
+  border-radius: var(--border-radius-md);
+  padding: 14px 20px;
+  margin-bottom: 24px;
+}
+
+.fav-stat-item {
+  font-size: 0.95rem;
+  color: var(--dark-text);
+}
+
+.fav-stat-item strong {
+  font-size: 1.15rem;
+  color: var(--primary-dark);
+}
+
 /* Filter Toolbar */
 .news-filter-toolbar {
   display: flex;
@@ -270,3 +293,76 @@
     gap: 20px;
   }
 }
+
+/* ─── Favorites Stats ─────────────────────────────────── */
+.favorites-stats-card {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  background: linear-gradient(135deg, var(--white) 0%, #f8fafc 100%);
+  padding: 24px 32px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--gray-medium);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 32px;
+  text-align: left;
+  animation: dropdownFadeIn 0.3s ease;
+}
+
+.stat-box-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat-box-icon {
+  font-size: 2.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--white);
+  box-shadow: var(--shadow-sm);
+  width: 56px;
+  height: 56px;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid #f1f5f9;
+}
+
+.stat-box-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-box-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--gray-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-box-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--primary-dark);
+}
+
+.stat-box-divider {
+  width: 1px;
+  height: 48px;
+  background-color: var(--gray-medium);
+}
+
+@media (max-width: 600px) {
+  .favorites-stats-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 20px;
+  }
+  .stat-box-divider {
+    display: none;
+  }
+}
+

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import Avatar from '../User/Avatar';
 import './Header.css';
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const { user } = useAuth();
   const location = useLocation();
@@ -14,6 +16,7 @@ export default function Header() {
   // Close mobile menu on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsDropdownOpen(false);
   }, [location]);
 
   // Add background on scroll
@@ -23,11 +26,47 @@ export default function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (!e.target.closest('.more-menu-container')) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('click', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('click', handleOutsideClick);
+    };
+  }, [isDropdownOpen]);
+
   const toggleMobileMenu = () => setIsMobileMenuOpen((prev) => !prev);
 
   // Icon click: logged-in → /profile, guest → /login
   const handleProfileIconClick = () => {
     navigate(user ? '/profile' : '/login');
+  };
+
+  const handleFavoritesClick = () => {
+    setIsDropdownOpen(false);
+    navigate('/articles?filter=favorites');
+  };
+
+  const handleToggleAnonymous = async () => {
+    setIsDropdownOpen(false);
+    if (!user) return;
+    try {
+      const { db } = await import('../../firebase/config');
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        is_anonymous: !user.isAnonymous
+      });
+    } catch (err) {
+      console.error('Lỗi khi bật/tắt chế độ ẩn danh:', err);
+      alert('Không thể cập nhật chế độ ẩn danh. Vui lòng thử lại.');
+    }
   };
 
   return (
@@ -74,20 +113,20 @@ export default function Header() {
           </ul>
         </nav>
 
-        {/* Right: Profile Icon + Hamburger */}
+        {/* Right: Profile Icon + Options dropdown + Hamburger */}
         <div className="header-actions">
           {/* Profile/User icon — always visible, behaviour depends on auth state */}
           <button
             className="avatar-btn"
             onClick={handleProfileIconClick}
             aria-label={user ? 'Trang cá nhân' : 'Đăng nhập'}
-            title={user ? `Xin chào, ${user.displayName || user.email}` : 'Đăng nhập'}
+            title={user ? (user.isAnonymous ? 'Đang bật chế độ ẩn danh' : `Xin chào, ${user.displayName || user.email}`) : 'Đăng nhập'}
           >
-            {user && user.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
+            {user ? (
+              <Avatar
+                src={user.isAnonymous ? '' : user.avatarUrl}
                 alt="Avatar"
-                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                style={{ width: '100%', height: '100%' }}
               />
             ) : (
               <svg className="user-icon" viewBox="0 0 24 24" fill="none">
@@ -96,6 +135,34 @@ export default function Header() {
               </svg>
             )}
           </button>
+
+          {/* ⋮ More/Options Menu Button */}
+          {user && (
+            <div className="more-menu-container">
+              <button
+                className="more-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDropdownOpen(prev => !prev);
+                }}
+                aria-label="Tùy chọn thêm"
+                title="Tùy chọn thêm"
+              >
+                ⋮
+              </button>
+
+              {isDropdownOpen && (
+                <div className="more-dropdown fade-in">
+                  <button className="dropdown-item" onClick={handleFavoritesClick}>
+                    ❤️ Bài viết yêu thích
+                  </button>
+                  <button className="dropdown-item" onClick={handleToggleAnonymous}>
+                    👤 {user.isAnonymous ? 'Tắt chế độ ẩn danh' : 'Bật chế độ ẩn danh'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Hamburger (mobile) */}
           <button
@@ -112,3 +179,4 @@ export default function Header() {
     </header>
   );
 }
+

@@ -367,6 +367,12 @@
   height: 36px;
   border-radius: 50%;
   object-fit: cover;
+  cursor: pointer;
+  transition: opacity var(--transition-fast, 0.2s);
+}
+
+.comment-avatar:hover {
+  opacity: 0.8;
 }
 
 .comment-content-wrapper {
@@ -377,25 +383,37 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 
 .comment-user-name {
   font-weight: 700;
   font-size: 0.9rem;
   color: var(--primary-dark);
+  cursor: pointer;
+  transition: color var(--transition-fast, 0.2s);
 }
 
+.comment-user-name:hover {
+  color: var(--primary-light);
+  text-decoration: underline;
+}
+
+
 .comment-time {
+  display: block;
   font-size: 0.78rem;
   color: var(--gray-text);
+  margin-top: 3px;
+  margin-bottom: 8px;
 }
 
 .comment-text {
   font-size: 0.95rem;
   color: var(--dark-text);
-  line-height: 1.5;
-  margin-bottom: 8px;
+  line-height: 1.6;
+  margin-top: 0;
+  margin-bottom: 10px;
 }
 
 .comment-actions {
@@ -427,9 +445,29 @@
   font-size: 0.75rem;
 }
 
+.comment-reply-to {
+  font-size: 0.8rem;
+  color: var(--primary-light);
+  font-weight: 500;
+}
+
 .edit-comment-actions {
   display: flex;
   gap: 8px;
+}
+
+.comment-like-count {
+  font-size: 0.82rem;
+  color: var(--gray-text);
+  font-weight: 500;
+}
+
+.comment-action-link.liked {
+  color: var(--primary-light);
+}
+
+.reply-form {
+  margin-top: 8px;
 }
 
 .btn-xs {

@@ -16,6 +16,9 @@ const CATEGORIES = [
   'Khác'
 ];
 
+// Roles allowed to publish immediately
+const PUBLISHER_ROLES = ['admin', 'teacher', 'psychologist'];
+
 export default function CreatePost() {
   const { id } = useParams(); // If present, edit mode
   const navigate = useNavigate();
@@ -31,7 +34,6 @@ export default function CreatePost() {
     coverImage: '',
     tagsInput: '',
     visibility: 'public',
-    status: 'published'
   });
 
   const [errors, setErrors] = useState({});
@@ -70,7 +72,6 @@ export default function CreatePost() {
         coverImage: article.coverImage || '',
         tagsInput: article.tags ? article.tags.join(', ') : '',
         visibility: article.visibility || 'public',
-        status: article.status || 'published'
       });
     } catch (err) {
       console.error('Error fetching existing article:', err);
@@ -119,6 +120,12 @@ export default function CreatePost() {
       ? formData.tagsInput.split(',').map(t => t.trim()).filter(Boolean)
       : [];
 
+    // Determine status based on role
+    const canPublish = user.role && PUBLISHER_ROLES.includes(user.role);
+    const articleStatus = isEditMode
+      ? (formData.status || 'published')  // keep existing status when editing
+      : (canPublish ? 'published' : 'pending');
+
     const payload = {
       title: formData.title.trim(),
       category: formData.category,
@@ -127,7 +134,7 @@ export default function CreatePost() {
       coverImage: formData.coverImage.trim() || 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=600&q=80',
       tags: tagsArray,
       visibility: formData.visibility,
-      status: formData.status
+      status: articleStatus,
     };
 
     try {
@@ -137,8 +144,17 @@ export default function CreatePost() {
         navigate(`/articles/${id}`);
       } else {
         const newId = await createArticleService(payload, user);
-        alert('Đăng bài viết mới thành công!');
-        navigate(`/articles/${newId}`);
+        if (canPublish) {
+          alert('Đăng bài viết mới thành công!');
+          navigate(`/articles/${newId}`);
+        } else {
+          alert(
+            'Bài viết của bạn đã được gửi thành công!\n\n' +
+            'Bài viết đang chờ quản trị viên, giáo viên hoặc chuyên gia kiểm duyệt trước khi được công khai.\n\n' +
+            'Bạn có thể xem trạng thái bài viết trong trang Hồ sơ cá nhân.'
+          );
+          navigate('/articles');
+        }
       }
     } catch (err) {
       console.error('Error saving article:', err);
@@ -289,38 +305,20 @@ export default function CreatePost() {
           {errors.content && <span className="error-message">{errors.content}</span>}
         </div>
 
-        {/* Tags & Status Row */}
-        <div className="form-row-2">
-          <div className="form-group">
-            <label className="form-label" htmlFor="tagsInput">
-              Thẻ chủ đề (Tags)
-            </label>
-            <input
-              type="text"
-              id="tagsInput"
-              name="tagsInput"
-              className="form-input"
-              placeholder="Nhập các thẻ phân cách bằng dấu phẩy (Ví dụ: bạclực, kĩnăng, an toàn)"
-              value={formData.tagsInput}
-              onChange={handleChange}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="status">
-              Trạng thái bài viết
-            </label>
-            <select
-              id="status"
-              name="status"
-              className="form-input select-input"
-              value={formData.status}
-              onChange={handleChange}
-            >
-              <option value="published">Xuất bản ngay (Published)</option>
-              <option value="draft">Bản nháp (Draft)</option>
-            </select>
-          </div>
+        {/* Tags */}
+        <div className="form-group">
+          <label className="form-label" htmlFor="tagsInput">
+            Thẻ chủ đề (Tags)
+          </label>
+          <input
+            type="text"
+            id="tagsInput"
+            name="tagsInput"
+            className="form-input"
+            placeholder="Nhập các thẻ phân cách bằng dấu phẩy (Ví dụ: bạclực, kĩnăng, an toàn)"
+            value={formData.tagsInput}
+            onChange={handleChange}
+          />
         </div>
 
         {/* Actions */}

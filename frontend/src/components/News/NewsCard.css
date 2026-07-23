@@ -164,3 +164,41 @@
   width: 14px;
   height: 14px;
 }
+
+/* Card Actions Row (Favorite + Read More) */
+.card-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-card-fav {
+  background: none;
+  border: 1px solid var(--gray-medium);
+  border-radius: var(--border-radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--gray-text);
+  white-space: nowrap;
+}
+
+.btn-card-fav:hover {
+  background-color: #fff0f0;
+  border-color: #f87171;
+  transform: scale(1.1);
+}
+
+.btn-card-fav.active {
+  border-color: #f43f5e;
+  background-color: #fff0f3;
+}
+
+.btn-card-fav:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+

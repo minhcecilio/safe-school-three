@@ -31,15 +31,18 @@ export const getArticlesService = async ({ search = '', category = '', sortBy = 
     let q = query(articlesRef, where('isDeleted', '!=', true));
     
     const querySnapshot = await getDocs(q);
-    let articles = querySnapshot.docs.map(docSnap => {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        ...data,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt || new Date().toISOString(),
-      };
-    });
+    let articles = querySnapshot.docs
+      .map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt || new Date().toISOString(),
+        };
+      })
+      // Only show published articles in the public list
+      .filter(a => !a.status || a.status === 'published');
 
     // Client-side filtering & sorting for flexible UI handling
     if (category && category !== 'Tất cả') {
@@ -345,5 +348,96 @@ export const deleteCommentService = async (commentId) => {
   } catch (error) {
     console.error('Error in deleteCommentService:', error);
     throw error;
+  }
+};
+
+/**
+ * Fetch favorite articles for a user
+ */
+export const getFavoriteArticlesService = async (userId) => {
+  if (!userId) return [];
+  try {
+    const favRef = collection(db, FAV_COLLECTION);
+    const q = query(favRef, where('userId', '==', userId));
+    const snap = await getDocs(q);
+    const articleIds = snap.docs.map(docSnap => docSnap.data().articleId);
+    
+    if (articleIds.length === 0) return [];
+    
+    const articles = await Promise.all(
+      articleIds.map(async (id) => {
+        try {
+          const art = await getArticleByIdService(id);
+          return art;
+        } catch (err) {
+          console.error(`Error fetching article ${id} in favorites:`, err);
+          return null;
+        }
+      })
+    );
+    
+    return articles.filter(Boolean);
+  } catch (error) {
+    console.error('Error in getFavoriteArticlesService:', error);
+    return [];
+  }
+};
+
+/**
+ * Approve a pending article (moderator action)
+ */
+export const approveArticleService = async (id) => {
+  try {
+    const docRef = doc(db, ARTICLES_COLLECTION, id);
+    await updateDoc(docRef, {
+      status: 'published',
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error in approveArticleService:', error);
+    throw error;
+  }
+};
+
+/**
+ * Reject a pending article (moderator action)
+ */
+export const rejectArticleService = async (id, reason = '') => {
+  try {
+    const docRef = doc(db, ARTICLES_COLLECTION, id);
+    await updateDoc(docRef, {
+      status: 'rejected',
+      rejectionReason: reason,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error in rejectArticleService:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch articles by authorId (including pending/rejected, for profile view)
+ */
+export const getArticlesByAuthorService = async (authorId) => {
+  if (!authorId) return [];
+  try {
+    const articlesRef = collection(db, ARTICLES_COLLECTION);
+    const q = query(articlesRef, where('authorId', '==', authorId), where('isDeleted', '!=', true));
+    const snap = await getDocs(q);
+    const articles = snap.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt || new Date().toISOString(),
+      };
+    });
+    articles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return articles;
+  } catch (error) {
+    console.error('Error in getArticlesByAuthorService:', error);
+    return [];
   }
 };

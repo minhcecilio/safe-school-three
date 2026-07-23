@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signOut, updateProfile, deleteUser } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
-import { doc, getDoc, updateDoc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import Avatar from '../components/User/Avatar';
 import './Profile.css';
 
 export default function Profile() {
@@ -21,7 +22,7 @@ export default function Profile() {
 
   // User data initial state
   const [userData, setUserData] = useState({
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80',
+    avatar: '',
     fullName: '',
     email: '',
     phone: '',
@@ -33,6 +34,7 @@ export default function Profile() {
     hidePhone: false,
     hideAddress: false
   });
+
 
   // Edit states
   const [isEditing, setIsEditing] = useState(false);
@@ -47,6 +49,10 @@ export default function Profile() {
     confirmPassword: ''
   });
   const [passwordErrors, setPasswordErrors] = useState({});
+
+  // Activity stats (real-time)
+  const [totalLikesReceived, setTotalLikesReceived] = useState(0);
+  const [totalFavReceived, setTotalFavReceived] = useState(0);
 
   // Delete account states & refs
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -84,22 +90,26 @@ export default function Profile() {
         const userDoc = await getDoc(doc(db, 'users', targetUid));
         if (userDoc.exists()) {
           const data = userDoc.data();
+          const isUserAnonymous = data.is_anonymous || false;
+          const showAsAnonymous = isUserAnonymous && !isOwner;
+
           const loadedData = {
-            avatar: data.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80',
-            fullName: data.DisplayName || data.displayName || 'Chưa đặt tên',
-            email: data.email || '',
-            phone: data.phone || '',
-            dob: data.dob || '',
-            gender: data.gender || 'Nam',
-            address: data.address || '',
-            role: data.role === 'teacher' ? 'Giáo viên' : data.role === 'parent' ? 'Phụ huynh' : data.role === 'psychologist' ? 'Chuyên gia' : 'Học sinh',
-            createdAt: data.createdAt
+            avatar: showAsAnonymous ? '' : (data.avatarUrl || ''),
+            fullName: showAsAnonymous ? 'Người dùng ẩn danh' : (data.DisplayName || data.displayName || 'Chưa đặt tên'),
+            email: showAsAnonymous ? '******' : (data.email || ''),
+            phone: showAsAnonymous ? '******' : (data.phone || ''),
+            dob: showAsAnonymous ? '******' : (data.dob || ''),
+            gender: showAsAnonymous ? 'Ẩn' : (data.gender || 'Nam'),
+            address: showAsAnonymous ? '******' : (data.address || ''),
+            role: showAsAnonymous ? 'Học sinh ẩn danh' : (data.role === 'teacher' ? 'Giáo viên' : data.role === 'parent' ? 'Phụ huynh' : data.role === 'psychologist' ? 'Chuyên gia' : 'Học sinh'),
+            createdAt: showAsAnonymous ? '******' : (data.createdAt
               ? (data.createdAt.seconds
                 ? new Date(data.createdAt.seconds * 1000).toLocaleDateString('vi-VN')
                 : new Date().toLocaleDateString('vi-VN'))
-              : new Date().toLocaleDateString('vi-VN'),
+              : new Date().toLocaleDateString('vi-VN')),
             hidePhone: data.hidePhone || false,
-            hideAddress: data.hideAddress || false
+            hideAddress: data.hideAddress || false,
+            isAnonymous: isUserAnonymous
           };
           setUserData(loadedData);
           setFormData(loadedData);
@@ -107,7 +117,7 @@ export default function Profile() {
           // Fallback if target user is current user
           if (targetUid === currentUser?.uid) {
             const loadedData = {
-              avatar: currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80',
+              avatar: currentUser.avatarUrl || '',
               fullName: currentUser.displayName || 'Chưa đặt tên',
               email: currentUser.email || '',
               phone: '',
@@ -117,7 +127,8 @@ export default function Profile() {
               role: currentUser.role === 'teacher' ? 'Giáo viên' : currentUser.role === 'parent' ? 'Phụ huynh' : currentUser.role === 'psychologist' ? 'Chuyên gia' : 'Học sinh',
               createdAt: new Date().toLocaleDateString('vi-VN'),
               hidePhone: false,
-              hideAddress: false
+              hideAddress: false,
+              isAnonymous: currentUser.isAnonymous || false
             };
             setUserData(loadedData);
             setFormData(loadedData);
@@ -134,6 +145,48 @@ export default function Profile() {
 
     fetchUserData();
   }, [targetUid, currentUser, authLoading]);
+
+  // Real-time activity stats listener
+  useEffect(() => {
+    if (!targetUid) return;
+
+    let unsubFavReceived = () => {};
+
+    // 1. Total likes received + fav received: listen to all articles by this user
+    const articlesQuery = query(
+      collection(db, 'articles'),
+      where('authorId', '==', targetUid),
+      where('isDeleted', '!=', true)
+    );
+    const unsubArticles = onSnapshot(articlesQuery, (snap) => {
+      // Sum all likes
+      const total = snap.docs.reduce((sum, d) => sum + (d.data().likes || 0), 0);
+      setTotalLikesReceived(total);
+
+      // Cleanup previous fav listener
+      unsubFavReceived();
+
+      const articleIds = snap.docs.map(d => d.id);
+      if (articleIds.length === 0) {
+        setTotalFavReceived(0);
+        return;
+      }
+
+      // Query fav collection where articleId belongs to user's articles (batch max 30)
+      const batchIds = articleIds.slice(0, 30);
+      const favQuery = query(collection(db, 'fav'), where('articleId', 'in', batchIds));
+      unsubFavReceived = onSnapshot(favQuery, (favSnap) => {
+        setTotalFavReceived(favSnap.size);
+      }, err => console.error('Stats fav received snapshot error:', err));
+
+    }, err => console.error('Stats articles snapshot error:', err));
+
+    return () => {
+      unsubArticles();
+      unsubFavReceived();
+    };
+  }, [targetUid]);
+
 
   // Input changes
   const handleInputChange = (e) => {
@@ -462,10 +515,11 @@ export default function Profile() {
               onClick={() => isEditing && fileInputRef.current.click()}
               title={isEditing ? 'Nhấn để chọn ảnh mới' : ''}
             >
-              <img
+              <Avatar
                 src={avatarPreview || (isEditing ? formData.avatar : userData.avatar)}
                 alt="User Avatar"
                 className="profile-avatar-img"
+                style={{ width: '100%', height: '100%' }}
               />
               {isEditing && (
                 <div className="avatar-edit-overlay">
@@ -475,9 +529,17 @@ export default function Profile() {
             </div>
 
             <div className="profile-header-info">
-              <h2 className="profile-name">{userData.fullName || 'Chưa đặt tên'}</h2>
+              <h2 className="profile-name">
+                {userData.fullName || 'Chưa đặt tên'}
+                {userData.isAnonymous && (
+                  <span className="anon-badge" style={{ marginLeft: '12px', fontSize: '0.8rem', backgroundColor: '#e2e8f0', color: '#64748b', padding: '4px 8px', borderRadius: '12px', fontWeight: '500' }}>
+                    🕵️ Ẩn danh
+                  </span>
+                )}
+              </h2>
               <span className="profile-role-badge">🏷️ {userData.role}</span>
               <p className="profile-meta-text">Tài khoản được tạo ngày: {userData.createdAt}</p>
+
 
 
             </div>
@@ -500,6 +562,23 @@ export default function Profile() {
                 </div>
               )
             )}
+          </div>
+        </div>
+
+        {/* Activity Statistics */}
+        <div className="profile-stats-section">
+          <h3 className="profile-stats-title">Thống kê hoạt động</h3>
+          <div className="profile-stats-grid">
+            <div className="profile-stat-card">
+              <span className="profile-stat-icon">👍</span>
+              <span className="profile-stat-value">{totalLikesReceived.toLocaleString('vi-VN')}</span>
+              <span className="profile-stat-label">Lượt thích nhận được</span>
+            </div>
+            <div className="profile-stat-card">
+              <span className="profile-stat-icon">❤️</span>
+              <span className="profile-stat-value">{totalFavReceived.toLocaleString('vi-VN')}</span>
+              <span className="profile-stat-label">Lượt yêu thích nhận được</span>
+            </div>
           </div>
         </div>
 
