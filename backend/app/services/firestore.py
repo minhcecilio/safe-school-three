@@ -217,11 +217,12 @@ class FirestoreService:
         post_data = post_doc.to_dict()
         author_id = post_data.get("authorId") or post_data.get("uid")
 
-        # Đổi status thành 'published' nếu được duyệt (để frontend bài viết đọc được status)
-        final_status = "published" if status_val == "approved" else status_val
+        # Đổi status thành 'approved' nếu được duyệt (để frontend bài viết đọc được status)
+        final_status = "approved" if status_val == "approved" else status_val
 
         update_data = {
             "status": final_status,
+            "visibility": "public" if status_val == "approved" else "private",
             "reviewedBy": admin_uid,
             "reviewedAt": datetime.now().isoformat(),
             "moderatedAt": datetime.now().isoformat(),
@@ -254,7 +255,7 @@ class FirestoreService:
             details={"status": final_status, "reason": reason}
         )
 
-        return {"id": post_id, "status": status_val}
+        return {"id": post_id, "status": status_val, "notificationSent": bool(author_id)}
     
     @staticmethod
     async def delete_post(post_id: str, admin_uid: str) -> Dict[str, Any]:
