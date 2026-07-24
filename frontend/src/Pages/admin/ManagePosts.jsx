@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getPosts, approvePost } from "../../api/admin";
+import { getPosts, approvePost, deletePost } from "../../api/admin";
 import Modal from "../../components/Common/Modal";
 import Toast from "../../components/Common/Toast";
 import { db } from "../../firebase/config";
@@ -71,34 +71,43 @@ const ManagePosts = () => {
         fetchPostsList();
     }, [statusFilter]);
 
-    // Mở modal Duyệt hoặc Từ chối
+    // Mở modal Duyệt, Từ chối hoặc Xóa
     const handleOpenActionModal = (post, type) => {
         setSelectedPost(post);
         setActionType(type);
         setShowModal(true);
     };
 
+    const handleDeletePost = async () => {
+        if (!selectedPost) return;
+
+        try {
+            const postId = selectedPost.id || selectedPost.postId || selectedPost._id;
+            await deletePost(postId);
+
+            setToast({
+                message: `Đã xóa bài viết "${selectedPost.title || "Bài viết"}" thành công!`,
+                type: "success",
+            });
+
+            setShowModal(false);
+            setSelectedPost(null);
+            setActionType(null);
+            fetchPostsList();
+        } catch (err) {
+            setToast({
+                message: "Lỗi khi xóa bài viết: " + err.message,
+                type: "error",
+            });
+        }
+    };
+
     // Xác nhận Duyệt hoặc Từ chối bài viết
     const handleConfirmAction = async (reasonInput) => {
         if (!selectedPost || !actionType) return;
 
-        if (actionType === 'delete') {
-            try {
-                await deleteArticleCascadeService(selectedPost.id);
-                setToast({
-                    message: `Đã xóa bài viết "${selectedPost.title || 'Bài viết'}" và toàn bộ dữ liệu liên quan.`,
-                    type: 'success',
-                });
-                setShowModal(false);
-                setSelectedPost(null);
-                setActionType(null);
-                fetchPostsList();
-            } catch (err) {
-                setToast({
-                    message: 'Lỗi khi xóa bài viết: ' + err.message,
-                    type: 'error',
-                });
-            }
+        if (actionType === "delete") {
+            await handleDeletePost();
             return;
         }
 
@@ -201,25 +210,31 @@ const ManagePosts = () => {
                 title={
                     actionType === "approved"
                         ? "✅ Xác Nhận Duyệt Bài Viết"
-                        : actionType === "delete"
-                            ? "🗑️ Xác Nhận Xóa Bài Viết"
-                            : "❌ Từ Chối Bài Viết"
+                        : actionType === "rejected"
+                            ? "❌ Từ Chối Bài Viết"
+                            : "🗑️ Xác Nhận Xóa Bài Viết"
                 }
                 message={
                     actionType === "approved"
                         ? `Bạn có chắc chắn muốn DUYỆT bài viết "${selectedPost?.title}" để đăng lên diễn đàn công khai không?`
-                        : actionType === "delete"
-                            ? `Bạn có chắc chắn muốn XÓA VĨNH VIỄN bài viết "${selectedPost?.title}"? Toàn bộ bình luận, lượt yêu thích và báo cáo liên quan cũng sẽ bị xóa.`
-                            : `Nhập lý do từ chối bài viết "${selectedPost?.title}". Thông báo sẽ được tự động gửi đến tác giả.`
+                        : actionType === "rejected"
+                            ? `Nhập lý do từ chối bài viết "${selectedPost?.title}". Thông báo sẽ được tự động gửi đến tác giả.`
+                            : `Bạn có chắc chắn muốn XÓA bài viết "${selectedPost?.title}" khỏi hệ thống? Hành động này không thể hoàn tác.`
                 }
-                variant={actionType === "approved" ? "success" : actionType === "delete" ? "danger" : "danger"}
+                variant={actionType === "approved" ? "success" : actionType === "rejected" ? "danger" : "danger"}
                 inputPlaceholder={
                     actionType === "rejected"
                         ? "Nhập lý do từ chối (ví dụ: Vi phạm quy chuẩn nội dung)..."
                         : ""
                 }
                 requireInput={actionType === "rejected"}
-                confirmText={actionType === "approved" ? "Đồng Ý Duyệt" : actionType === "delete" ? "Xóa Vĩnh Viễn" : "Từ Chối Bài"}
+                confirmText={
+                    actionType === "approved"
+                        ? "Đồng Ý Duyệt"
+                        : actionType === "rejected"
+                            ? "Từ Chối Bài"
+                            : "Xác Nhận Xóa"
+                }
                 cancelText="Hủy Bỏ"
                 onConfirm={handleConfirmAction}
                 onCancel={() => {

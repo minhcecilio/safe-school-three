@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getUsers, updateUser } from '../../api/admin';
+import { getUsers, updateUser, deleteUser } from '../../api/admin';
 import Modal from '../../components/Common/Modal';
 import Toast from '../../components/Common/Toast';
 
@@ -12,8 +12,9 @@ const ManageUsers = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
-  // State cho Modal xác nhận khóa/mở khóa
+  // State cho Modal xác nhận (Khóa/Mở khóa hoặc Xóa)
   const [selectedUser, setSelectedUser] = useState(null);
+  const [modalType, setModalType] = useState(null); // 'toggle' | 'delete'
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'info' });
 
@@ -40,31 +41,58 @@ const ManageUsers = () => {
   // Mở modal xác nhận thay đổi trạng thái user
   const handleOpenToggleStatusModal = (user) => {
     setSelectedUser(user);
+    setModalType('toggle');
     setShowModal(true);
   };
 
-  // Thực thi Khóa hoặc Mở khóa user
-  const handleConfirmToggleStatus = async () => {
-    if (!selectedUser) return;
+  // Mở modal xác nhận xóa user
+  const handleOpenDeleteModal = (user) => {
+    setSelectedUser(user);
+    setModalType('delete');
+    setShowModal(true);
+  };
 
-    const newActiveState = !(selectedUser.is_active ?? true);
-    try {
-      await updateUser(selectedUser.uid, {
-        is_active: newActiveState,
-      });
+  // Thực thi Khóa/Mở khóa hoặc Xóa user
+  const handleConfirmAction = async () => {
+    if (!selectedUser || !modalType) return;
 
-      setToast({
-        message: newActiveState
-          ? `Đã mở khóa tài khoản [${selectedUser.displayName || selectedUser.email}]`
-          : `Đã khóa tài khoản [${selectedUser.displayName || selectedUser.email}] thành công!`,
-        type: newActiveState ? 'success' : 'warning',
-      });
+    if (modalType === 'toggle') {
+      const newActiveState = !(selectedUser.is_active ?? true);
+      try {
+        await updateUser(selectedUser.uid, {
+          is_active: newActiveState,
+        });
 
-      setShowModal(false);
-      setSelectedUser(null);
-      fetchUsersList(); // Tải lại danh sách
-    } catch (err) {
-      setToast({ message: 'Lỗi cập nhật trạng thái user: ' + err.message, type: 'error' });
+        setToast({
+          message: newActiveState
+            ? `Đã mở khóa tài khoản [${selectedUser.displayName || selectedUser.email}]`
+            : `Đã khóa tài khoản [${selectedUser.displayName || selectedUser.email}] thành công!`,
+          type: newActiveState ? 'success' : 'warning',
+        });
+
+        setShowModal(false);
+        setSelectedUser(null);
+        setModalType(null);
+        fetchUsersList();
+      } catch (err) {
+        setToast({ message: 'Lỗi cập nhật trạng thái user: ' + err.message, type: 'error' });
+      }
+    } else if (modalType === 'delete') {
+      try {
+        await deleteUser(selectedUser.uid);
+
+        setToast({
+          message: `Đã xóa vĩnh viễn tài khoản [${selectedUser.displayName || selectedUser.email}] thành công!`,
+          type: 'success',
+        });
+
+        setShowModal(false);
+        setSelectedUser(null);
+        setModalType(null);
+        fetchUsersList();
+      } catch (err) {
+        setToast({ message: 'Lỗi khi xóa tài khoản: ' + err.message, type: 'error' });
+      }
     }
   };
 
@@ -95,6 +123,28 @@ const ManageUsers = () => {
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  const getModalProps = () => {
+    if (modalType === 'delete') {
+      return {
+        title: '🗑️ Xác Nhận Xóa Vĩnh Viễn Tài Khoản',
+        message: `Bạn có CỰC KỲ CHẮC CHẮN muốn XÓA VĨNH VIỄN tài khoản "${selectedUser?.displayName || selectedUser?.email}"? Thao tác này sẽ xóa tài khoản khỏi Firebase Auth & Firestore và KHÔNG THỂ HOÀN TÁC!`,
+        variant: 'danger',
+        confirmText: 'Xóa Vĩnh Viễn',
+      };
+    }
+    const isActive = selectedUser?.is_active ?? true;
+    return {
+      title: isActive ? '🔒 Xác nhận Khóa Tài Khoản' : '🔓 Xác nhận Mở Khóa Tài Khoản',
+      message: isActive
+        ? `Bạn có chắc chắn muốn KHÓA tài khoản "${selectedUser?.displayName || selectedUser?.email}"? Người dùng này sẽ không thể đăng nhập vào hệ thống SafeSchool.`
+        : `Bạn có chắc chắn muốn MỞ KHÓA tài khoản "${selectedUser?.displayName || selectedUser?.email}"?`,
+      variant: isActive ? 'danger' : 'success',
+      confirmText: isActive ? 'Khóa Tài Khoản' : 'Mở Khóa',
+    };
+  };
+
+  const modalProps = getModalProps();
+
   return (
     <div>
       <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'info' })} />
@@ -102,19 +152,16 @@ const ManageUsers = () => {
       {/* Confirmation Modal */}
       <Modal
         isOpen={showModal}
-        title={selectedUser?.is_active ?? true ? '🔒 Xác nhận Khóa Tài Khoản' : '🔓 Xác nhận Mở Khóa Tài Khoản'}
-        message={
-          selectedUser?.is_active ?? true
-            ? `Bạn có chắc chắn muốn KHÓA tài khoản "${selectedUser?.displayName || selectedUser?.email}"? Người dùng này sẽ không thể đăng nhập vào hệ thống SafeSchool.`
-            : `Bạn có chắc chắn muốn MỞ KHÓA tài khoản "${selectedUser?.displayName || selectedUser?.email}"?`
-        }
-        variant={selectedUser?.is_active ?? true ? 'danger' : 'success'}
-        confirmText={selectedUser?.is_active ?? true ? 'Khóa Tài Khoản' : 'Mở Khóa'}
+        title={modalProps.title}
+        message={modalProps.message}
+        variant={modalProps.variant}
+        confirmText={modalProps.confirmText}
         cancelText="Hủy"
-        onConfirm={handleConfirmToggleStatus}
+        onConfirm={handleConfirmAction}
         onCancel={() => {
           setShowModal(false);
           setSelectedUser(null);
+          setModalType(null);
         }}
       />
 
@@ -124,7 +171,7 @@ const ManageUsers = () => {
           👥 Quản Lý Người Dùng & Phân Quyền
         </h1>
         <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.95rem' }}>
-          Xem danh sách, phân quyền vai trò và khóa/mở khóa tài khoản người dùng
+          Xem danh sách, phân quyền vai trò, khóa/mở khóa hoặc xóa vĩnh viễn tài khoản người dùng
         </p>
       </div>
 
@@ -313,23 +360,42 @@ const ManageUsers = () => {
                         )}
                       </td>
 
-                      {/* Actions */}
+                      {/* Actions: Lock/Unlock & Delete */}
                       <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                        <button
-                          onClick={() => handleOpenToggleStatusModal(u)}
-                          style={{
-                            padding: '6px 14px',
-                            borderRadius: '6px',
-                            border: 'none',
-                            backgroundColor: isActive ? '#fef2f2' : '#f0fdf4',
-                            color: isActive ? '#dc2626' : '#16a34a',
-                            fontWeight: '600',
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {isActive ? '🔒 Khóa User' : '🔓 Mở Khóa'}
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => handleOpenToggleStatusModal(u)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              backgroundColor: isActive ? '#fef2f2' : '#f0fdf4',
+                              color: isActive ? '#dc2626' : '#16a34a',
+                              fontWeight: '600',
+                              fontSize: '0.825rem',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {isActive ? '🔒 Khóa' : '🔓 Mở'}
+                          </button>
+
+                          <button
+                            onClick={() => handleOpenDeleteModal(u)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              backgroundColor: '#fee2e2',
+                              color: '#991b1b',
+                              fontWeight: '600',
+                              fontSize: '0.825rem',
+                              cursor: 'pointer',
+                            }}
+                            title="Xóa vĩnh viễn tài khoản người dùng"
+                          >
+                            🗑️ Xóa
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -17,6 +17,15 @@ export const updateUser = async (uid, data) => {
 };
 
 /**
+ * Xóa vĩnh viễn tài khoản người dùng
+ * @param {string} uid 
+ */
+export const deleteUser = async (uid) => {
+  return await api.delete(`/api/admin/users/${uid}`);
+};
+
+
+/**
  * Lấy danh sách bài viết trong hệ thống
  * @param {string} status 'all' | 'pending' | 'approved' | 'rejected'
  */
@@ -33,6 +42,14 @@ export const getPosts = async (status = 'all') => {
  */
 export const approvePost = async (postId, data) => {
   return await api.put(`/api/admin/posts/${postId}`, data);
+};
+
+/**
+ *Xóa vĩnh viễn bài viết (chỉ Admin)
+ * @param {string} postId 
+ */
+export const deletePost = async (postId) => {
+  return await api.delete(`/api/admin/posts/${postId}`);
 };
 
 /**
