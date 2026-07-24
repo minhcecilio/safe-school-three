@@ -589,108 +589,108 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* User's Created Articles Section */}
-        {myArticles.length > 0 && (
+        {/* User's Created Articles Section — always visible to owner */}
+        {isOwner && (
           <div className="profile-details-card" style={{ marginBottom: '0px' }}>
             <h3 className="card-title">📝 Bài viết của tôi ({myArticles.length})</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
-              {myArticles.map((art) => {
-                const isPending = art.status === 'pending';
-                const isRejected = art.status === 'rejected';
-                return (
-                  <div
-                    key={art.id}
-                    onClick={() => navigate(`/articles/${art.id}`)}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '12px 16px',
-                      backgroundColor: '#f8fafc',
-                      borderRadius: '8px',
-                      border: '1px solid #e2e8f0',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                  >
-                    <div style={{ flex: 1, marginRight: '16px' }}>
-                      <h4 style={{ margin: '0 0 4px 0', fontSize: '0.98rem', color: '#0f172a', fontWeight: '600' }}>{art.title}</h4>
-                      <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
-                        🏷️ {art.category || 'Khác'} • {new Date(art.createdAt).toLocaleDateString('vi-VN')}
-                      </p>
+            {myArticles.length === 0 ? (
+              <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: '12px', fontStyle: 'italic' }}>
+                Bạn chưa có bài viết nào. Hãy <span
+                  onClick={() => navigate('/articles/create')}
+                  style={{ color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline' }}
+                >viết bài mới</span> để chia sẻ kiến thức của bạn!
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
+                {myArticles.map((art) => {
+                  const isPending = art.status === 'pending' || !art.status;
+                  const isRejected = art.status === 'rejected';
+                  const isApproved = art.status === 'approved';
+                  return (
+                    <div
+                      key={art.id}
+                      onClick={() => navigate(`/articles/${art.id}`)}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        padding: '12px 16px',
+                        backgroundColor: isRejected ? '#fff5f5' : '#f8fafc',
+                        borderRadius: '8px',
+                        border: `1px solid ${isRejected ? '#fca5a5' : isPending ? '#fcd34d' : '#e2e8f0'}`,
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isRejected ? '#fee2e2' : '#f1f5f9'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isRejected ? '#fff5f5' : '#f8fafc'}
+                    >
+                      <div style={{ flex: 1, marginRight: '16px' }}>
+                        <h4 style={{ margin: '0 0 4px 0', fontSize: '0.98rem', color: '#0f172a', fontWeight: '600' }}>{art.title}</h4>
+                        <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
+                          🏷️ {art.category || 'Khác'} • {new Date(art.createdAt).toLocaleDateString('vi-VN')}
+                        </p>
+                        {/* Show rejection reason inline */}
+                        {isRejected && art.rejectionReason && (
+                          <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: '#dc2626', fontStyle: 'italic' }}>
+                            💬 Lý do: {art.rejectionReason}
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                        {isPending && (
+                          <span style={{
+                            backgroundColor: '#fef3c7',
+                            color: '#d97706',
+                            border: '1px solid #fcd34d',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '0.82rem',
+                            fontWeight: '600',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            ⏳ Chờ kiểm duyệt
+                          </span>
+                        )}
+                        {isRejected && (
+                          <span style={{
+                            backgroundColor: '#fee2e2',
+                            color: '#dc2626',
+                            border: '1px solid #fca5a5',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '0.82rem',
+                            fontWeight: '600',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            ❌ Bị từ chối
+                          </span>
+                        )}
+                        {isApproved && (
+                          <span style={{
+                            backgroundColor: '#dcfce7',
+                            color: '#16a34a',
+                            border: '1px solid #86efac',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '0.82rem',
+                            fontWeight: '600',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            ✅ Đã duyệt
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {art.visibility === 'private' && (
-                        <span style={{
-                          backgroundColor: '#f1f5f9',
-                          color: '#475569',
-                          border: '1px solid #cbd5e1',
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '0.82rem',
-                          fontWeight: '600',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}>
-                          🔒 Riêng tư
-                        </span>
-                      )}
-                      {isPending && (
-                        <span style={{
-                          backgroundColor: '#fef3c7',
-                          color: '#d97706',
-                          border: '1px solid #fcd34d',
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '0.82rem',
-                          fontWeight: '600',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}>
-                          ⏳ Chờ kiểm duyệt
-                        </span>
-                      )}
-                      {isRejected && (
-                        <span style={{
-                          backgroundColor: '#fee2e2',
-                          color: '#dc2626',
-                          border: '1px solid #fca5a5',
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '0.82rem',
-                          fontWeight: '600',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }} title={art.rejectionReason || 'Bài viết bị từ chối'}>
-                          ❌ Từ chối
-                        </span>
-                      )}
-                      {!isPending && !isRejected && (
-                        <span style={{
-                          backgroundColor: '#dcfce7',
-                          color: '#16a34a',
-                          border: '1px solid #86efac',
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '0.82rem',
-                          fontWeight: '600',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}>
-                          ✅ Đã duyệt
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
