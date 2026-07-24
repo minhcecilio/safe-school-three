@@ -222,10 +222,12 @@ class FirestoreService:
 
         update_data = {
             "status": final_status,
+            "reviewedBy": admin_uid,
+            "reviewedAt": datetime.now().isoformat(),
             "moderatedAt": datetime.now().isoformat(),
             "moderatedBy": admin_uid,
-            "reason": reason or "",
-            "rejectionReason": reason or ""
+            "rejectionReason": reason or "",
+            "reason": reason or ""
         }
         post_ref.update(update_data)
 

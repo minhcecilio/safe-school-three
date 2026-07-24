@@ -50,9 +50,10 @@ export default function Profile() {
   });
   const [passwordErrors, setPasswordErrors] = useState({});
 
-  // Activity stats (real-time)
-  const [totalLikesReceived, setTotalLikesReceived] = useState(0);
-  const [totalFavReceived, setTotalFavReceived] = useState(0);
+  // Activity stats — interactions the user has PERFORMED
+  const [totalLikesGiven, setTotalLikesGiven] = useState(0);
+  const [totalFavGiven, setTotalFavGiven] = useState(0);
+  const [myArticles, setMyArticles] = useState([]);
 
   // Delete account states & refs
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -146,44 +147,50 @@ export default function Profile() {
     fetchUserData();
   }, [targetUid, currentUser, authLoading]);
 
-  // Real-time activity stats listener
+  // Real-time activity stats — count interactions the user has PERFORMED
   useEffect(() => {
     if (!targetUid) return;
 
-    let unsubFavReceived = () => {};
-
-    // 1. Total likes received + fav received: listen to all articles by this user
+    // 1. Count articles this user has liked (likedBy array contains targetUid)
+    //    Firestore does not support array-contains on a top-level query across all docs easily,
+    //    so we use array-contains query.
     const articlesQuery = query(
       collection(db, 'articles'),
       where('authorId', '==', targetUid),
       where('isDeleted', '!=', true)
     );
     const unsubArticles = onSnapshot(articlesQuery, (snap) => {
-      // Sum all likes
-      const total = snap.docs.reduce((sum, d) => sum + (d.data().likes || 0), 0);
-      setTotalLikesReceived(total);
-
-      // Cleanup previous fav listener
-      unsubFavReceived();
-
-      const articleIds = snap.docs.map(d => d.id);
-      if (articleIds.length === 0) {
-        setTotalFavReceived(0);
-        return;
-      }
-
-      // Query fav collection where articleId belongs to user's articles (batch max 30)
-      const batchIds = articleIds.slice(0, 30);
-      const favQuery = query(collection(db, 'fav'), where('articleId', 'in', batchIds));
-      unsubFavReceived = onSnapshot(favQuery, (favSnap) => {
-        setTotalFavReceived(favSnap.size);
-      }, err => console.error('Stats fav received snapshot error:', err));
-
+      const userArts = snap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        createdAt: d.data().createdAt?.toDate ? d.data().createdAt.toDate().toISOString() : d.data().createdAt || new Date().toISOString()
+      }));
+      userArts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setMyArticles(userArts);
     }, err => console.error('Stats articles snapshot error:', err));
+
+    // 2. Count articles the user has liked (array-contains query on all articles)
+    const likedQuery = query(
+      collection(db, 'articles'),
+      where('likedBy', 'array-contains', targetUid)
+    );
+    const unsubLikes = onSnapshot(likedQuery, (snap) => {
+      setTotalLikesGiven(snap.size);
+    }, err => console.error('Stats likes given snapshot error:', err));
+
+    // 3. Count fav docs where userId == targetUid (bao gồm bài của bất kỳ ai)
+    const favQuery = query(
+      collection(db, 'fav'),
+      where('userId', '==', targetUid)
+    );
+    const unsubFav = onSnapshot(favQuery, (snap) => {
+      setTotalFavGiven(snap.size);
+    }, err => console.error('Stats fav given snapshot error:', err));
 
     return () => {
       unsubArticles();
-      unsubFavReceived();
+      unsubLikes();
+      unsubFav();
     };
   }, [targetUid]);
 
@@ -571,16 +578,121 @@ export default function Profile() {
           <div className="profile-stats-grid">
             <div className="profile-stat-card">
               <span className="profile-stat-icon">👍</span>
-              <span className="profile-stat-value">{totalLikesReceived.toLocaleString('vi-VN')}</span>
-              <span className="profile-stat-label">Lượt thích nhận được</span>
+              <span className="profile-stat-value">{totalLikesGiven.toLocaleString('vi-VN')}</span>
+              <span className="profile-stat-label">Bài viết đã thích</span>
             </div>
             <div className="profile-stat-card">
               <span className="profile-stat-icon">❤️</span>
-              <span className="profile-stat-value">{totalFavReceived.toLocaleString('vi-VN')}</span>
-              <span className="profile-stat-label">Lượt yêu thích nhận được</span>
+              <span className="profile-stat-value">{totalFavGiven.toLocaleString('vi-VN')}</span>
+              <span className="profile-stat-label">Bài viết đã lưu</span>
             </div>
           </div>
         </div>
+
+        {/* User's Created Articles Section */}
+        {myArticles.length > 0 && (
+          <div className="profile-details-card" style={{ marginBottom: '0px' }}>
+            <h3 className="card-title">📝 Bài viết của tôi ({myArticles.length})</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
+              {myArticles.map((art) => {
+                const isPending = art.status === 'pending';
+                const isRejected = art.status === 'rejected';
+                return (
+                  <div
+                    key={art.id}
+                    onClick={() => navigate(`/articles/${art.id}`)}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 16px',
+                      backgroundColor: '#f8fafc',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                  >
+                    <div style={{ flex: 1, marginRight: '16px' }}>
+                      <h4 style={{ margin: '0 0 4px 0', fontSize: '0.98rem', color: '#0f172a', fontWeight: '600' }}>{art.title}</h4>
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
+                        🏷️ {art.category || 'Khác'} • {new Date(art.createdAt).toLocaleDateString('vi-VN')}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {art.visibility === 'private' && (
+                        <span style={{
+                          backgroundColor: '#f1f5f9',
+                          color: '#475569',
+                          border: '1px solid #cbd5e1',
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '0.82rem',
+                          fontWeight: '600',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          🔒 Riêng tư
+                        </span>
+                      )}
+                      {isPending && (
+                        <span style={{
+                          backgroundColor: '#fef3c7',
+                          color: '#d97706',
+                          border: '1px solid #fcd34d',
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '0.82rem',
+                          fontWeight: '600',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          ⏳ Chờ kiểm duyệt
+                        </span>
+                      )}
+                      {isRejected && (
+                        <span style={{
+                          backgroundColor: '#fee2e2',
+                          color: '#dc2626',
+                          border: '1px solid #fca5a5',
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '0.82rem',
+                          fontWeight: '600',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }} title={art.rejectionReason || 'Bài viết bị từ chối'}>
+                          ❌ Từ chối
+                        </span>
+                      )}
+                      {!isPending && !isRejected && (
+                        <span style={{
+                          backgroundColor: '#dcfce7',
+                          color: '#16a34a',
+                          border: '1px solid #86efac',
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '0.82rem',
+                          fontWeight: '600',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          ✅ Đã duyệt
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Profile Main Content Grid */}
         <div className={`profile-grid ${!isOwner ? 'single-column' : ''}`}>

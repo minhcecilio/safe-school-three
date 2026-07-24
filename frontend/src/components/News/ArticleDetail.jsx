@@ -15,7 +15,9 @@ import {
   addCommentService,
   updateCommentService,
   deleteCommentService,
-  softDeleteArticleService
+  deleteArticleCascadeService,
+  approveArticleService,
+  rejectArticleService
 } from '../../services/articleService';
 import './ArticleDetail.css';
 
@@ -456,10 +458,14 @@ export default function ArticleDetail() {
     }
   };
 
-  // ── Soft delete ──
+  // ── Hard (cascade) delete ──
   const handleSoftDelete = async () => {
+    const confirmed = window.confirm(
+      'Bạn có chắc muốn xóa bài viết này?\nToàn bộ bình luận, lượt yêu thích và báo cáo liên quan cũng sẽ bị xóa vĩnh viễn.'
+    );
+    if (!confirmed) return;
     try {
-      await softDeleteArticleService(id);
+      await deleteArticleCascadeService(id);
       alert('Bài viết đã được xóa thành công.');
       navigate('/articles');
     } catch (err) {
@@ -492,7 +498,33 @@ export default function ArticleDetail() {
   const defaultImage = 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=800&q=80';
   const isAuthor = user && article && (user.uid === article.authorId || user.role === 'admin');
 
-  // Root-level comments only (no parentId or parentId === null)
+  const MODERATOR_ROLES = ['admin', 'teacher', 'psychologist', 'giáo viên', 'chuyên gia'];
+  const canModerate = user && user.role && MODERATOR_ROLES.includes(String(user.role).trim().toLowerCase());
+
+  const handleApprove = async () => {
+    try {
+      await approveArticleService(id, user?.uid || 'admin');
+      setArticle(prev => ({ ...prev, status: 'approved', reviewedBy: user?.uid || 'admin', reviewedAt: new Date().toISOString() }));
+      alert('Bài viết đã được duyệt thành công!');
+    } catch (err) {
+      console.error('Error approving article:', err);
+      alert('Không thể duyệt bài viết. Vui lòng thử lại.');
+    }
+  };
+
+  const handleReject = async () => {
+    const reason = window.prompt('Nhập lý do từ chối bài viết:');
+    if (reason === null) return;
+    try {
+      await rejectArticleService(id, reason, user?.uid || 'admin');
+      setArticle(prev => ({ ...prev, status: 'rejected', rejectionReason: reason, reviewedBy: user?.uid || 'admin', reviewedAt: new Date().toISOString() }));
+      alert('Bài viết đã bị từ chối.');
+    } catch (err) {
+      console.error('Error rejecting article:', err);
+      alert('Không thể từ chối bài viết. Vui lòng thử lại.');
+    }
+  };
+
   const rootComments = comments.filter(c => !c.parentId);
 
   if (loading) return (
@@ -501,15 +533,29 @@ export default function ArticleDetail() {
     </div>
   );
 
-  if (error || !article) return (
-    <div className="article-detail-container">
-      <div className="detail-error-state">
-        <h2>⚠️ Lỗi</h2>
-        <p>{error || 'Bài viết không tìm thấy.'}</p>
-        <button className="btn btn-primary" onClick={() => navigate('/articles')}>Quay lại danh sách bài viết</button>
+  // Access control check
+  const isAuthorUser = user && article && user.uid === article.authorId;
+  const isPrivateViewBlocked = article && article.visibility === 'private' && !isAuthorUser && user?.role !== 'admin';
+  const isUnapprovedViewBlocked = article && (article.status === 'pending' || article.status === 'rejected') && !isAuthorUser && !canModerate;
+
+  if (error || !article || isPrivateViewBlocked || isUnapprovedViewBlocked) {
+    let errorMessage = error || 'Bài viết không tìm thấy.';
+    if (isPrivateViewBlocked) {
+      errorMessage = 'Bài viết này ở chế độ riêng tư, chỉ tác giả mới có quyền xem.';
+    } else if (isUnapprovedViewBlocked) {
+      errorMessage = 'Bài viết này chưa được duyệt công khai. Chỉ tác giả hoặc người kiểm duyệt mới có thể xem.';
+    }
+
+    return (
+      <div className="article-detail-container">
+        <div className="detail-error-state">
+          <h2>⚠️ Lỗi truy cập</h2>
+          <p>{errorMessage}</p>
+          <button className="btn btn-primary" onClick={() => navigate('/articles')}>Quay lại danh sách bài viết</button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div className="article-detail-container fade-in">
@@ -518,6 +564,56 @@ export default function ArticleDetail() {
       </div>
 
       <div className="article-reader-card">
+        {/* Moderation Status Banner */}
+        {article.status === 'pending' && (
+          <div style={{
+            backgroundColor: '#fffbeb',
+            border: '1px solid #fcd34d',
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div>
+              <strong style={{ color: '#b45309' }}>⏳ Bài viết đang chờ kiểm duyệt</strong>
+              <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#92400e' }}>
+                Bài viết này đang được kiểm duyệt trước khi hiển thị công khai.
+              </p>
+            </div>
+            {canModerate && (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-success btn-sm" onClick={handleApprove}>
+                  ✅ Duyệt bài
+                </button>
+                <button className="btn btn-danger-outline btn-sm" onClick={handleReject}>
+                  ❌ Từ chối bài
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {article.status === 'rejected' && (
+          <div style={{
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fca5a5',
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '20px'
+          }}>
+            <strong style={{ color: '#b91c1c' }}>❌ Bài viết đã bị từ chối</strong>
+            {article.rejectionReason && (
+              <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#991b1b' }}>
+                Lý do: {article.rejectionReason}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Cover */}
         <div className="detail-cover-wrapper">
           <img

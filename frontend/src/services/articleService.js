@@ -12,13 +12,15 @@ import {
   arrayUnion, 
   arrayRemove, 
   increment, 
-  serverTimestamp 
+  serverTimestamp,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 const ARTICLES_COLLECTION = 'articles';
 const COMMENTS_COLLECTION = 'comments';
 const FAV_COLLECTION = 'fav';
+const REPORTS_COLLECTION = 'reports';
 
 /**
  * Fetch list of articles (excluding isDeleted === true)
@@ -41,8 +43,8 @@ export const getArticlesService = async ({ search = '', category = '', sortBy = 
           updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt || new Date().toISOString(),
         };
       })
-      // Only show published articles in the public list
-      .filter(a => !a.status || a.status === 'published');
+      // Only show approved & public articles in the public list
+      .filter(a => a.status === 'approved' && (a.visibility === 'public' || !a.visibility));
 
     // Client-side filtering & sorting for flexible UI handling
     if (category && category !== 'Tất cả') {
@@ -121,7 +123,7 @@ export const incrementArticleViewService = async (id) => {
 };
 
 /**
- * Create a new article
+ * Create a new article — always status: 'pending', awaiting moderation
  */
 export const createArticleService = async (articleData, user) => {
   try {
@@ -133,7 +135,8 @@ export const createArticleService = async (articleData, user) => {
       coverImage: articleData.coverImage || 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=600&q=80',
       tags: articleData.tags || [],
       visibility: articleData.visibility || 'public',
-      status: articleData.status || 'published',
+      // All articles start as pending — moderation required regardless of role
+      status: 'pending',
       authorId: user?.uid || 'anonymous',
       authorName: user?.displayName || user?.email || 'Tác giả Safe School',
       authorAvatar: user?.avatarUrl || '',
@@ -154,6 +157,7 @@ export const createArticleService = async (articleData, user) => {
   }
 };
 
+
 /**
  * Update an existing article
  */
@@ -168,7 +172,7 @@ export const updateArticleService = async (id, articleData) => {
       coverImage: articleData.coverImage,
       tags: articleData.tags || [],
       visibility: articleData.visibility || 'public',
-      status: articleData.status || 'published',
+      status: articleData.status || 'pending',
       updatedAt: serverTimestamp(),
     };
 
@@ -194,6 +198,69 @@ export const softDeleteArticleService = async (id) => {
     throw error;
   }
 };
+
+/**
+ * Helper: commit a batch and flush ops array
+ */
+const _commitBatchOps = async (ops) => {
+  if (ops.length === 0) return;
+  const batch = writeBatch(db);
+  ops.forEach(ref => batch.delete(ref));
+  await batch.commit();
+};
+
+/**
+ * Hard (cascade) delete an article and ALL related data:
+ *  - articles/{id}
+ *  - comments where articleId == id
+ *  - fav where articleId == id
+ *  - reports where articleId == id (if collection exists)
+ */
+export const deleteArticleCascadeService = async (articleId) => {
+  if (!articleId) throw new Error('articleId is required');
+
+  try {
+    // Collect all doc refs to delete
+    const toDelete = [];
+
+    // 1. The article document itself
+    toDelete.push(doc(db, ARTICLES_COLLECTION, articleId));
+
+    // 2. Comments linked to this article
+    const commentsSnap = await getDocs(
+      query(collection(db, COMMENTS_COLLECTION), where('articleId', '==', articleId))
+    );
+    commentsSnap.forEach(d => toDelete.push(doc(db, COMMENTS_COLLECTION, d.id)));
+
+    // 3. Fav (bookmarks) linked to this article
+    const favSnap = await getDocs(
+      query(collection(db, FAV_COLLECTION), where('articleId', '==', articleId))
+    );
+    favSnap.forEach(d => toDelete.push(doc(db, FAV_COLLECTION, d.id)));
+
+    // 4. Reports linked to this article (collection may not exist — safe to query)
+    try {
+      const reportsSnap = await getDocs(
+        query(collection(db, REPORTS_COLLECTION), where('articleId', '==', articleId))
+      );
+      reportsSnap.forEach(d => toDelete.push(doc(db, REPORTS_COLLECTION, d.id)));
+    } catch (_) {
+      // reports collection doesn't exist yet — ignore
+    }
+
+    // Firestore batch limit is 500 ops per commit — chunk if needed
+    const BATCH_LIMIT = 500;
+    for (let i = 0; i < toDelete.length; i += BATCH_LIMIT) {
+      const chunk = toDelete.slice(i, i + BATCH_LIMIT);
+      await _commitBatchOps(chunk);
+    }
+  } catch (error) {
+    console.error('Error in deleteArticleCascadeService:', error);
+    throw error;
+  }
+};
+
+
 
 /**
  * Toggle Like / Unlike for an article
@@ -385,12 +452,19 @@ export const getFavoriteArticlesService = async (userId) => {
 
 /**
  * Approve a pending article (moderator action)
+ * Sets status='approved' and visibility='public' so the article appears in the public list.
  */
-export const approveArticleService = async (id) => {
+export const approveArticleService = async (id, reviewerId = 'admin') => {
   try {
     const docRef = doc(db, ARTICLES_COLLECTION, id);
+    const nowIso = new Date().toISOString();
     await updateDoc(docRef, {
-      status: 'published',
+      status: 'approved',
+      visibility: 'public',   // Make article publicly visible after approval
+      reviewedBy: reviewerId,
+      reviewedAt: nowIso,
+      moderatedBy: reviewerId,
+      moderatedAt: nowIso,
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
@@ -401,13 +475,21 @@ export const approveArticleService = async (id) => {
 
 /**
  * Reject a pending article (moderator action)
+ * Sets status='rejected' and visibility='private' so the article is hidden from public.
  */
-export const rejectArticleService = async (id, reason = '') => {
+export const rejectArticleService = async (id, reason = '', reviewerId = 'admin') => {
   try {
     const docRef = doc(db, ARTICLES_COLLECTION, id);
+    const nowIso = new Date().toISOString();
     await updateDoc(docRef, {
       status: 'rejected',
+      visibility: 'private',  // Hide from public view
       rejectionReason: reason,
+      reason: reason,
+      reviewedBy: reviewerId,
+      reviewedAt: nowIso,
+      moderatedBy: reviewerId,
+      moderatedAt: nowIso,
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
