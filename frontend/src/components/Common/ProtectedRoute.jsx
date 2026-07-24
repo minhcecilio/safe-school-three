@@ -2,7 +2,21 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
-export default function ProtectedRoute({ children }) {
+// Roles allowed to access admin/moderation panel
+const MODERATOR_ROLES = ['admin', 'teacher', 'psychologist', 'expert', 'giáo viên', 'chuyên gia', 'moderator'];
+
+export const isModerator = (role) => {
+  if (!role) return false;
+  return MODERATOR_ROLES.includes(String(role).trim().toLowerCase());
+};
+
+/**
+ * ProtectedRoute — guards a route behind authentication.
+ * Props:
+ *   children      — the component(s) to render when authorized
+ *   requireAdmin  — if true, also checks that user has a moderator/admin role
+ */
+export default function ProtectedRoute({ children, requireAdmin = false }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -39,6 +53,11 @@ export default function ProtectedRoute({ children }) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Admin/moderator gate
+  if (requireAdmin && !isModerator(user.role)) {
+    return <Navigate to="/" replace />;
   }
 
   return children;

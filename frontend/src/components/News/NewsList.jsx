@@ -123,18 +123,20 @@ export default function NewsList() {
       });
 
     } else {
-      // Normal articles list in real-time
+      // Normal articles list in real-time (filter out pending or rejected articles for public view)
       const articlesQuery = query(collection(db, 'articles'), where('isDeleted', '!=', true));
       unsubscribeArticles = onSnapshot(articlesQuery, (artSnap) => {
-        let allArticles = artSnap.docs.map(docSnap => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            ...data,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt || new Date().toISOString(),
-          };
-        });
+        let allArticles = artSnap.docs
+          .map(docSnap => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              ...data,
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
+              updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt || new Date().toISOString(),
+            };
+          })
+          .filter(a => (!a.status || a.status === 'approved') && (a.visibility === 'public' || !a.visibility));
 
         // Client-side filtering & sorting
         if (selectedCategory && selectedCategory !== 'Tất cả') {
@@ -173,20 +175,36 @@ export default function NewsList() {
     };
   }, [selectedCategory, selectedSort, showFavorites, user, activeSearchQuery]);
 
-  // Compute favorites page stats when articles change
+  // Compute favorites page stats: ALL interactions current user has performed
   useEffect(() => {
-    if (!showFavorites || articles.length === 0) {
+    if (!showFavorites || !user) {
       setFavStats({ totalLikes: 0, totalFavs: 0 });
       return;
     }
-    const totalLikes = articles.reduce((s, a) => s + (a.likes || 0), 0);
-    const articleIds = articles.map(a => a.id).slice(0, 30);
-    const q = query(collection(db, 'fav'), where('articleId', 'in', articleIds));
-    const unsub = onSnapshot(q, (snap) => {
-      setFavStats({ totalLikes, totalFavs: snap.size });
-    }, err => console.error('FavStats snapshot error:', err));
-    return () => unsub();
-  }, [showFavorites, articles]);
+
+    // 1. Count articles this user has liked (includes own articles)
+    const likedQuery = query(
+      collection(db, 'articles'),
+      where('likedBy', 'array-contains', user.uid)
+    );
+    const unsubLiked = onSnapshot(likedQuery, (snap) => {
+      setFavStats(prev => ({ ...prev, totalLikes: snap.size }));
+    }, err => console.error('Error computing liked stats:', err));
+
+    // 2. Count all fav docs of this user (includes own articles)
+    const favQuery = query(
+      collection(db, 'fav'),
+      where('userId', '==', user.uid)
+    );
+    const unsubFav = onSnapshot(favQuery, (snap) => {
+      setFavStats(prev => ({ ...prev, totalFavs: snap.size }));
+    }, err => console.error('Error computing fav stats:', err));
+
+    return () => {
+      unsubLiked();
+      unsubFav();
+    };
+  }, [showFavorites, user]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -235,13 +253,13 @@ export default function NewsList() {
 
 
       {/* Stats bar for favorites view */}
-      {showFavorites && articles.length > 0 && (
+      {showFavorites && (
         <div className="fav-stats-bar">
           <span className="fav-stat-item">
-            👍 <strong>{favStats.totalLikes.toLocaleString('vi-VN')}</strong> lượt thích tổng cộng
+            👍 <strong>{favStats.totalLikes.toLocaleString('vi-VN')}</strong> lượt thích đã thực hiện
           </span>
           <span className="fav-stat-item">
-            ❤️ <strong>{favStats.totalFavs.toLocaleString('vi-VN')}</strong> lượt yêu thích nhận được
+            ❤️ <strong>{favStats.totalFavs.toLocaleString('vi-VN')}</strong> lượt yêu thích đã thực hiện
           </span>
         </div>
       )}

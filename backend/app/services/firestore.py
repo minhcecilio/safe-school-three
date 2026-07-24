@@ -115,11 +115,17 @@ class FirestoreService:
             return []
 
         try:
-            posts_ref = db.collection("posts")
+            posts_ref = db.collection("articles")
             if status_filter != "all":
                 posts_ref = posts_ref.where("status", "==", status_filter)
 
-            docs = posts_ref.stream()
+            docs = list(posts_ref.stream())
+            if not docs:
+                posts_ref = db.collection("posts")
+                if status_filter != "all":
+                    posts_ref = posts_ref.where("status", "==", status_filter)
+                docs = list(posts_ref.stream())
+
             posts = []
 
             for doc in docs:
@@ -152,8 +158,11 @@ class FirestoreService:
 
         update_data = {
             "status": status_val,
+            "reviewedBy": admin_uid,
+            "reviewedAt": datetime.now().isoformat(),
             "moderatedAt": datetime.now().isoformat(),
             "moderatedBy": admin_uid,
+            "rejectionReason": reason or "",
             "reason": reason or ""
         }
         post_ref.update(update_data)

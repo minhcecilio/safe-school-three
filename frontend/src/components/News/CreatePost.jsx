@@ -16,8 +16,14 @@ const CATEGORIES = [
   'Khác'
 ];
 
-// Roles allowed to publish immediately
-const PUBLISHER_ROLES = ['admin', 'teacher', 'psychologist'];
+// Roles allowed to access admin/moderation panel
+const MODERATOR_ROLES = ['admin', 'teacher', 'psychologist', 'expert', 'giáo viên', 'chuyên gia', 'moderator'];
+
+export const isPublisherRole = (role) => {
+  if (!role) return false;
+  const r = String(role).trim().toLowerCase();
+  return MODERATOR_ROLES.includes(r);
+};
 
 export default function CreatePost() {
   const { id } = useParams(); // If present, edit mode
@@ -58,7 +64,7 @@ export default function CreatePost() {
       }
 
       // Check permissions
-      if (user && user.uid !== article.authorId && user.role !== 'admin') {
+      if (user && user.uid !== article.authorId && !isPublisherRole(user.role)) {
         alert('Bạn không có quyền chỉnh sửa bài viết này.');
         navigate(`/articles/${id}`);
         return;
@@ -72,6 +78,7 @@ export default function CreatePost() {
         coverImage: article.coverImage || '',
         tagsInput: article.tags ? article.tags.join(', ') : '',
         visibility: article.visibility || 'public',
+        status: article.status || 'pending',
       });
     } catch (err) {
       console.error('Error fetching existing article:', err);
@@ -120,12 +127,6 @@ export default function CreatePost() {
       ? formData.tagsInput.split(',').map(t => t.trim()).filter(Boolean)
       : [];
 
-    // Determine status based on role
-    const canPublish = user.role && PUBLISHER_ROLES.includes(user.role);
-    const articleStatus = isEditMode
-      ? (formData.status || 'published')  // keep existing status when editing
-      : (canPublish ? 'published' : 'pending');
-
     const payload = {
       title: formData.title.trim(),
       category: formData.category,
@@ -134,7 +135,8 @@ export default function CreatePost() {
       coverImage: formData.coverImage.trim() || 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=600&q=80',
       tags: tagsArray,
       visibility: formData.visibility,
-      status: articleStatus,
+      // Status always pending — moderation required for all roles
+      status: isEditMode ? (formData.status || 'pending') : 'pending',
     };
 
     try {
@@ -143,18 +145,9 @@ export default function CreatePost() {
         alert('Cập nhật bài viết thành công!');
         navigate(`/articles/${id}`);
       } else {
-        const newId = await createArticleService(payload, user);
-        if (canPublish) {
-          alert('Đăng bài viết mới thành công!');
-          navigate(`/articles/${newId}`);
-        } else {
-          alert(
-            'Bài viết của bạn đã được gửi thành công!\n\n' +
-            'Bài viết đang chờ quản trị viên, giáo viên hoặc chuyên gia kiểm duyệt trước khi được công khai.\n\n' +
-            'Bạn có thể xem trạng thái bài viết trong trang Hồ sơ cá nhân.'
-          );
-          navigate('/articles');
-        }
+        await createArticleService(payload, user);
+        alert('Bài viết của bạn đã được gửi thành công và đang chờ kiểm duyệt trước khi được công khai.');
+        navigate('/articles');
       }
     } catch (err) {
       console.error('Error saving article:', err);
@@ -335,7 +328,7 @@ export default function CreatePost() {
             className="btn btn-primary"
             disabled={loading}
           >
-            {loading ? 'Đang lưu...' : isEditMode ? 'Lưu cập nhật' : 'Đăng bài viết'}
+            {loading ? 'Đang lưu...' : isEditMode ? 'Lưu cập nhật' : 'Gửi chờ kiểm duyệt'}
           </button>
         </div>
       </form>

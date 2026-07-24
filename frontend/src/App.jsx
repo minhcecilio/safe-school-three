@@ -83,11 +83,11 @@ function AppShell() {
           <Route path="/notifications" element={<NotificationsPlaceholder />} />
           <Route path="/consultation" element={<ConsultationPlaceholder />} />
 
-          {/* Protected Admin Routes */}
+          {/* Protected Admin Routes — only moderator roles (admin, teacher, expert…) */}
           <Route
             path="/admin"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireAdmin={true}>
                 <AdminLayout />
               </ProtectedRoute>
             }
