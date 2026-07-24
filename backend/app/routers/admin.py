@@ -57,6 +57,25 @@ async def admin_update_user(
     )
 
 
+@router.delete("/users/{uid}", response_model=ApiResponse, summary="Xóa vĩnh viễn tài khoản người dùng")
+async def admin_delete_user(
+    uid: str,
+    admin_uid: str = Depends(get_admin_user)
+):
+    """
+    **Antigravity User Management**: Cho phép Admin xóa vĩnh viễn tài khoản người dùng.
+    - Xóa khỏi Firestore và Firebase Auth.
+    - Tự động ghi log thao tác Admin vào collection `admin_logs`.
+    """
+    result = await FirestoreService.delete_user(uid=uid, admin_uid=admin_uid)
+    return ApiResponse(
+        success=True,
+        message="Xóa tài khoản người dùng thành công",
+        data=result
+    )
+
+
+
 # ==================== 2. QUẢN LÝ BÀI VIẾT ====================
 
 @router.get("/posts", response_model=ApiResponse, summary="Lấy danh sách bài viết (Có lọc theo status)")
@@ -106,6 +125,17 @@ async def admin_approve_post(
         data=result
     )
 
+@router.delete("/posts/{post_id}", response_model=ApiResponse, summary="Xóa vĩnh viễn bài viết")
+async def admin_delete_post(post_id: str, admin_uid: str = Depends(get_admin_user)):
+    result = await FirestoreService.delete_post(
+        post_id=post_id,
+        admin_uid=admin_uid
+    )
+    return ApiResponse(
+        success=True,
+        message="Xóa bài viết thành công",
+        data=result
+    )
 
 # ==================== 3. QUẢN LÝ BÁO CÁO ====================
 
