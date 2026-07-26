@@ -34,6 +34,8 @@ wheels/
 
 # Logs
 *.log
+firebase-debug.log
+pnpm-debug.log*
 
 # ==================== NODE ====================
 # Dependencies
@@ -46,6 +48,9 @@ yarn-error.log*
 dist/
 build/
 .vite/
+.cache/
+.parcel-cache/
+coverage/
 
 # ==================== FIREBASE ====================
 # Service Account Key (QUAN TRỌNG: KHÔNG COMMIT)
@@ -54,6 +59,7 @@ serviceAccountKey.json
 # ==================== ENV FILES ====================
 .env
 .env.local
+.env.*.local
 .env.development.local
 .env.test.local
 .env.production.local
