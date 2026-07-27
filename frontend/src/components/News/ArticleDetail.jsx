@@ -19,6 +19,7 @@ import {
   approveArticleService,
   rejectArticleService
 } from '../../services/articleService';
+import { createNotification } from '../../services/notificationService';
 import './ArticleDetail.css';
 
 // ── CommentItem: real-time user sync + like + reply ──────────────────────────
@@ -351,6 +352,16 @@ export default function ArticleDetail() {
     setLikesCount(prevLiked ? prevCount - 1 : prevCount + 1);
     try {
       await toggleLikeService(id, user.uid, prevLiked);
+      if (!prevLiked && article?.authorId && article.authorId !== user.uid) {
+        await createNotification({
+          userId: article.authorId,
+          title: 'Bài viết được thích',
+          message: `${user.displayName || 'Một người dùng'} vừa thích bài viết "${article.title || 'của bạn'}".`,
+          type: 'article_like',
+          relatedId: id,
+          relatedType: 'article',
+        });
+      }
     } catch (err) {
       console.error('Error toggling like:', err);
       setIsLiked(prevLiked);
@@ -368,6 +379,16 @@ export default function ArticleDetail() {
         await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'fav', d.id))));
       } else {
         await addDoc(favRef, { userId: user.uid, articleId: id, createdAt: serverTimestamp() });
+        if (article?.authorId && article.authorId !== user.uid) {
+          await createNotification({
+            userId: article.authorId,
+            title: 'Bài viết được thêm vào yêu thích',
+            message: `${user.displayName || 'Một người dùng'} vừa thêm bài viết "${article.title || 'của bạn'}" vào mục yêu thích.`,
+            type: 'article_favorite',
+            relatedId: id,
+            relatedType: 'article',
+          });
+        }
       }
     } catch (err) {
       console.error('Error toggling favorite:', err);
@@ -382,6 +403,16 @@ export default function ArticleDetail() {
     setSubmittingComment(true);
     try {
       await addCommentService(id, user, newCommentText);
+      if (article?.authorId && article.authorId !== user.uid) {
+        await createNotification({
+          userId: article.authorId,
+          title: 'Có bình luận mới',
+          message: `${user.displayName || 'Một người dùng'} vừa bình luận về bài viết "${article.title || 'của bạn'}".`,
+          type: 'article_comment',
+          relatedId: id,
+          relatedType: 'article',
+        });
+      }
       setNewCommentText('');
       // onSnapshot will auto-update comments list
     } catch (err) {

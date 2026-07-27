@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from '../components/Common/Modal';
 import Toast from '../components/Common/Toast';
+import { createNotification } from '../services/notificationService';
 import {
   subscribeToRooms,
   subscribeToMessages,
@@ -9,6 +10,8 @@ import {
   joinChatRoom,
   sendMessage,
   closeChatRoom,
+  updateUserPresence,
+  getUserPresence,
   formatTimestamp,
 } from '../services/chatService';
 import './Chat.css';
@@ -51,6 +54,16 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+
+    updateUserPresence(user.uid, selectedRoomId || null);
+
+    return () => {
+      updateUserPresence(user.uid, null);
+    };
+  }, [user?.uid, selectedRoomId]);
+
   const handleSelectRoom = async (room) => {
     try {
       await joinChatRoom(room.id, user.uid);
@@ -90,6 +103,22 @@ export default function Chat() {
         senderRole: user.role || 'student',
         text: messageText,
       });
+
+      const recipientIds = (selectedRoom?.participantIds || []).filter((id) => id && id !== user.uid);
+      for (const recipientId of recipientIds) {
+        const recipientPresence = await getUserPresence(recipientId);
+        if (recipientPresence?.activeRoomId !== selectedRoomId) {
+          await createNotification({
+            userId: recipientId,
+            title: 'Tin nhắn chat mới',
+            message: `${user.displayName || 'Một người dùng'} vừa gửi tin nhắn trong phòng "${selectedRoom?.title || 'chat'}".`,
+            type: 'chat_message',
+            relatedId: selectedRoomId,
+            relatedType: 'chat_room',
+          });
+        }
+      }
+
       setMessageText('');
     } catch (err) {
       setToast({ message: err.message, type: 'error' });

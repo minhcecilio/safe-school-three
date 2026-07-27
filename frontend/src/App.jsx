@@ -63,7 +63,11 @@ function NotificationsPlaceholder() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      items.sort((a, b) => {
+        const aTime = getDateValue(a.createdAt)?.getTime() ?? 0;
+        const bTime = getDateValue(b.createdAt)?.getTime() ?? 0;
+        return bTime - aTime;
+      });
       setNotifications(items);
       setLoading(false);
     }, (error) => {
@@ -74,10 +78,25 @@ function NotificationsPlaceholder() {
     return () => unsubscribe();
   }, [user?.uid]);
 
+  const getDateValue = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    if (typeof value?.toDate === 'function') {
+      return value.toDate();
+    }
+    if (value instanceof Date) {
+      return value;
+    }
+    return null;
+  };
+
   const formatTime = (value) => {
-    if (!value) return '';
+    const date = getDateValue(value);
+    if (!date) return '';
     try {
-      const date = typeof value === 'string' ? new Date(value) : value.toDate ? value.toDate() : new Date(value);
       return new Intl.DateTimeFormat('vi-VN', {
         dateStyle: 'medium',
         timeStyle: 'short',
