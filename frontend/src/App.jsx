@@ -24,6 +24,24 @@ import ManageUsers from './Pages/admin/ManageUsers';
 import ManagePosts from './Pages/admin/ManagePosts';
 import ManageReports from './Pages/admin/ManageReports';
 import ManageChat from './Pages/admin/ManageChat';
+import './Pages/Notifications.css';
+
+// Routes that should NOT show the main public Header/Footer chrome
+const NOTIFICATION_ICONS = {
+  sos_alert: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  ),
+  default: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  ),
+};
 
 // Routes that should NOT show the main public Header/Footer chrome
 const NO_CHROME_ROUTES = ['/register', '/login'];
@@ -99,49 +117,113 @@ function NotificationsPlaceholder() {
 
   if (authLoading || loading) {
     return (
-      <div style={{ padding: '120px 24px 80px', minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#64748b' }}>Đang tải thông báo...</p>
+      <div className="notifications-loading">
+        <div className="notifications-wrapper">
+          <header className="notifications-header">
+            <h1 className="notifications-title">🔔 Thông báo</h1>
+            <p className="notifications-subtitle">
+              Theo dõi các cập nhật mới nhất về bài viết, báo cáo và tài khoản của bạn.
+            </p>
+          </header>
+          <div className="notifications-card notifications-card--loading">
+            <p>Đang tải thông báo...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '120px 24px 80px', minHeight: '60vh', background: '#f8fafc' }}>
-      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '2.25rem', marginBottom: '8px', color: '#1e3c72' }}>Thông báo</h1>
-        <p style={{ color: '#64748b', fontSize: '1rem', marginBottom: '24px' }}>
-          Xem các thông báo mới nhất từ ban giám hiệu và hệ thống SafeSchool.
-        </p>
+    <div className="notifications-page">
+      <div className="notifications-wrapper">
+        <header className="notifications-header">
+          <h1 className="notifications-title">🔔 Thông báo</h1>
+          <p className="notifications-subtitle">
+            Theo dõi các cập nhật mới nhất về bài viết, báo cáo và tài khoản của bạn.
+          </p>
+        </header>
 
-        {notifications.length === 0 ? (
-          <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', boxShadow: '0 8px 24px rgba(15, 23, 42, 0.06)' }}>
-            <p style={{ margin: 0, color: '#64748b' }}>Hiện chưa có thông báo nào cho tài khoản này.</p>
+        <div className="notifications-stats">
+          <div className="notifications-stat">
+            <span className="notifications-stat-value">{notifications.length}</span>
+            <span className="notifications-stat-label">Tổng thông báo</span>
           </div>
-        ) : (
-          <div style={{ display: 'grid', gap: '12px' }}>
-            {notifications.map((item) => (
-              <div key={item.id} style={{ background: '#fff', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 8px 24px rgba(15, 23, 42, 0.06)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: '0 0 6px', color: '#0f172a', fontSize: '1rem' }}>{item.title || 'Thông báo mới'}</h3>
-                    <p style={{ margin: 0, color: '#475569', lineHeight: 1.6 }}>{item.message || 'Không có nội dung'}</p>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {item.createdAt && (
-                      <span style={{ color: '#64748b', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>{formatTime(item.createdAt)}</span>
-                    )}
+          <div className="notifications-stat notifications-stat--unread">
+            <span className="notifications-stat-value">
+              {notifications.filter((item) => item.read === false).length}
+            </span>
+            <span className="notifications-stat-label">Chưa đọc</span>
+          </div>
+          <div className="notifications-stat notifications-stat--read">
+            <span className="notifications-stat-value">
+              {notifications.filter((item) => item.read !== false).length}
+            </span>
+            <span className="notifications-stat-label">Đã đọc</span>
+          </div>
+        </div>
+
+        <div className="notifications-toolbar">
+          <div className="notifications-search">
+            <svg className="notifications-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="search"
+              className="notifications-search-input"
+              placeholder="Tìm kiếm thông báo..."
+              disabled
+              aria-label="Tìm kiếm thông báo"
+            />
+          </div>
+          <div className="notifications-filters" aria-hidden="true">
+            <span className="notifications-filter notifications-filter--active">Tất cả</span>
+            <span className="notifications-filter">Chưa đọc</span>
+            <span className="notifications-filter">Đã đọc</span>
+          </div>
+        </div>
+
+        <div className="notifications-card notifications-list-card">
+          {notifications.length === 0 ? (
+            <div className="notifications-empty">
+              <p>Hiện chưa có thông báo nào cho tài khoản này.</p>
+            </div>
+          ) : (
+            <ul className="notifications-list">
+              {notifications.map((item) => {
+                const isUnread = item.read === false;
+                const isAlert = item.type === 'sos_alert';
+
+                return (
+                  <li
+                    key={item.id}
+                    className={`notifications-item${isUnread ? ' notifications-item--unread' : ''}`}
+                  >
+                    <div className={`notifications-item-icon${isAlert ? ' notifications-item-icon--alert' : ''}`}>
+                      {NOTIFICATION_ICONS[isAlert ? 'sos_alert' : 'default']}
+                    </div>
+                    <div className="notifications-item-body">
+                      <h3 className="notifications-item-title">{item.title || 'Thông báo mới'}</h3>
+                      <p className="notifications-item-message">{item.message || 'Không có nội dung'}</p>
+                      {item.createdAt && (
+                        <div className="notifications-item-footer">
+                          <span className="notifications-item-time">{formatTime(item.createdAt)}</span>
+                        </div>
+                      )}
+                    </div>
                     <button
+                      type="button"
+                      className="notifications-item-delete"
                       onClick={() => handleDelete(item.id)}
-                      style={{ border: 'none', background: '#fee2e2', color: '#b91c1c', padding: '6px 10px', borderRadius: '999px', cursor: 'pointer', fontSize: '0.875rem' }}
                     >
                       Xóa
                     </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
