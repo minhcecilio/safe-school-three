@@ -5,6 +5,7 @@ import {
   updateDoc,
   deleteDoc,
   getDoc,
+  setDoc,
   query,
   orderBy,
   onSnapshot,
@@ -148,6 +149,21 @@ export async function closeChatRoom(roomId, closedByName) {
     text: `Phòng chat đã được đóng bởi ${closedByName}`,
     createdAt: serverTimestamp(),
   });
+}
+
+export async function updateUserPresence(userId, roomId) {
+  if (!userId) return;
+  const presenceRef = doc(db, 'userPresence', userId);
+  await setDoc(presenceRef, {
+    activeRoomId: roomId || null,
+    lastSeenAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export async function getUserPresence(userId) {
+  if (!userId) return { activeRoomId: null };
+  const presenceSnap = await getDoc(doc(db, 'userPresence', userId));
+  return presenceSnap.exists() ? presenceSnap.data() : { activeRoomId: null };
 }
 
 export async function deleteChatRoom(roomId) {
