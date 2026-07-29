@@ -10,7 +10,7 @@ export const getUsers = async () => {
 /**
  * Cập nhật thông tin người dùng (Khóa/Mở khóa, Đổi role)
  * @param {string} uid 
- * @param {Object} data { is_active: boolean, role: string, is_anonymous: boolean }
+ * @param {Object} data { is_active: boolean, role: string, is_anonymous: boolean, reason: string }
  */
 export const updateUser = async (uid, data) => {
   return await api.put(`/api/admin/users/${uid}`, data);
@@ -20,8 +20,10 @@ export const updateUser = async (uid, data) => {
  * Xóa vĩnh viễn tài khoản người dùng
  * @param {string} uid 
  */
-export const deleteUser = async (uid) => {
-  return await api.delete(`/api/admin/users/${uid}`);
+export const deleteUser = async (uid, reason = '') => {
+  return await api.delete(`/api/admin/users/${uid}`, {
+    params: { reason },
+  });
 };
 
 
@@ -56,9 +58,9 @@ export const deletePost = async (postId) => {
  * Lấy danh sách báo cáo vi phạm/khẩn cấp
  * @param {string} status 'all' | 'pending' | 'processing' | 'resolved'
  */
-export const getReports = async (status = 'all') => {
+export const getReports = async (status = 'all', priority = 'all') => {
   return await api.get('/api/admin/reports', {
-    params: { status }
+    params: { status, priority }
   });
 };
 
@@ -69,6 +71,10 @@ export const getReports = async (status = 'all') => {
  */
 export const updateReport = async (reportId, data) => {
   return await api.put(`/api/admin/reports/${reportId}`, data);
+};
+
+export const deleteReport = async (reportId) => {
+  return await api.delete(`/api/admin/reports/${reportId}`);
 };
 
 /**

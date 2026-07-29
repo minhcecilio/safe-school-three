@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getReports, updateReport } from '../../api/admin';
+import { getReports, updateReport, deleteReport } from '../../api/admin';
 import Modal from '../../components/Common/Modal';
 import Toast from '../../components/Common/Toast';
 
@@ -8,6 +8,7 @@ const ManageReports = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
@@ -23,7 +24,7 @@ const ManageReports = () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await getReports(statusFilter);
+      const res = await getReports(statusFilter, priorityFilter);
       if (res && res.data) {
         setReports(res.data);
       }
@@ -37,7 +38,7 @@ const ManageReports = () => {
 
   useEffect(() => {
     fetchReportsList();
-  }, [statusFilter]);
+  }, [statusFilter, priorityFilter]);
 
   // Mở modal cập nhật trạng thái báo cáo
   const handleOpenReportModal = (report, targetStatus) => {
@@ -72,6 +73,21 @@ const ManageReports = () => {
       fetchReportsList();
     } catch (err) {
       setToast({ message: 'Lỗi khi cập nhật báo cáo: ' + err.message, type: 'error' });
+    }
+  };
+
+  const handleDeleteReport = async (report) => {
+    if (!report) return;
+
+    const confirmDelete = window.confirm(`Bạn có chắc muốn xóa báo cáo "${report.title || report.id}" không? Hành động này không thể hoàn tác.`);
+    if (!confirmDelete) return;
+
+    try {
+      await deleteReport(report.id);
+      setToast({ message: `Đã xóa báo cáo #${report.id.substring(0, 6)} thành công!`, type: 'success' });
+      fetchReportsList();
+    } catch (err) {
+      setToast({ message: 'Lỗi khi xóa báo cáo: ' + err.message, type: 'error' });
     }
   };
 
@@ -206,29 +222,57 @@ const ManageReports = () => {
         </div>
 
         {/* Filter Dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>Lọc Trạng Thái:</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-            style={{
-              padding: '10px 14px',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              fontSize: '0.9rem',
-              backgroundColor: '#ffffff',
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-          >
-            <option value="all">Tất cả báo cáo</option>
-            <option value="pending">Chờ tiếp nhận (Pending)</option>
-            <option value="processing">Đang xử lý (Processing)</option>
-            <option value="resolved">Đã giải quyết (Resolved)</option>
-          </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>Lọc Trạng Thái:</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.9rem',
+                backgroundColor: '#ffffff',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value="all">Tất cả báo cáo</option>
+              <option value="pending">Chờ tiếp nhận (Pending)</option>
+              <option value="processing">Đang xử lý (Processing)</option>
+              <option value="resolved">Đã giải quyết (Resolved)</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>Lọc Mức Ưu Tiên:</label>
+            <select
+              value={priorityFilter}
+              onChange={(e) => {
+                setPriorityFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.9rem',
+                backgroundColor: '#ffffff',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value="all">Tất cả mức ưu tiên</option>
+              <option value="sos">SOS</option>
+              <option value="high">High</option>
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -272,7 +316,8 @@ const ManageReports = () => {
                 </tr>
               ) : (
                 paginatedReports.map((r) => {
-                  const isSOS = (r.priority || '').toUpperCase() === 'SOS';
+                  const reportType = (r.type || '').toLowerCase();
+                  const isSOS = reportType === 'sos_emergency' || (r.priority || '').toUpperCase() === 'SOS';
                   const isPending = (r.status || 'pending') === 'pending';
                   const isProcessing = r.status === 'processing';
                   const isResolved = r.status === 'resolved';
@@ -395,6 +440,25 @@ const ManageReports = () => {
                             }}
                           >
                             <span>✅</span> Hoàn thành
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteReport(r)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              backgroundColor: '#dc2626',
+                              color: '#ffffff',
+                              fontWeight: '600',
+                              fontSize: '0.825rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <span>🗑️</span> Xóa
                           </button>
                         </div>
                       </td>

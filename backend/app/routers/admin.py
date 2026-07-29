@@ -46,10 +46,11 @@ async def admin_update_user(
     - Tự động ghi log thao tác Admin vào collection `admin_logs`.
     """
     update_dict = update_data.model_dump(exclude_unset=True)
+    reason = update_dict.pop("reason", None)
     if not update_dict:
         raise HTTPException(status_code=400, detail="Không có thông tin nào được cập nhật")
 
-    result = await FirestoreService.update_user(uid=uid, update_dict=update_dict, admin_uid=admin_uid)
+    result = await FirestoreService.update_user(uid=uid, update_dict=update_dict, admin_uid=admin_uid, reason=reason)
     return ApiResponse(
         success=True,
         message="Cập nhật thông tin người dùng thành công",
@@ -60,6 +61,7 @@ async def admin_update_user(
 @router.delete("/users/{uid}", response_model=ApiResponse, summary="Xóa vĩnh viễn tài khoản người dùng")
 async def admin_delete_user(
     uid: str,
+    reason: Optional[str] = Query(None),
     admin_uid: str = Depends(get_admin_user)
 ):
     """
@@ -67,7 +69,7 @@ async def admin_delete_user(
     - Xóa khỏi Firestore và Firebase Auth.
     - Tự động ghi log thao tác Admin vào collection `admin_logs`.
     """
-    result = await FirestoreService.delete_user(uid=uid, admin_uid=admin_uid)
+    result = await FirestoreService.delete_user(uid=uid, admin_uid=admin_uid, reason=reason)
     return ApiResponse(
         success=True,
         message="Xóa tài khoản người dùng thành công",
@@ -142,6 +144,7 @@ async def admin_delete_post(post_id: str, admin_uid: str = Depends(get_admin_use
 @router.get("/reports", response_model=ApiResponse, summary="Lấy danh sách báo cáo (Ưu tiên báo cáo SOS)")
 async def admin_get_reports(
     status_filter: str = Query("all", alias="status", description="Lọc trạng thái: pending, processing, resolved, hoặc all"),
+    priority_filter: str = Query("all", alias="priority", description="Lọc mức độ ưu tiên: sos, high, normal, low, hoặc all"),
     admin_uid: str = Depends(get_admin_user)
 ):
     """
@@ -149,7 +152,10 @@ async def admin_get_reports(
     - Danh sách báo cáo vi phạm bạo lực học đường.
     - Tự động ưu tiên báo cáo **SOS** đẩy lên đầu danh sách để xử lý khẩn cấp.
     """
-    reports = await FirestoreService.get_all_reports(status_filter=status_filter)
+    reports = await FirestoreService.get_all_reports(
+        status_filter=status_filter,
+        priority_filter=priority_filter
+    )
     return ApiResponse(
         success=True,
         message=f"Lấy thành công {len(reports)} báo cáo",
@@ -179,6 +185,26 @@ async def admin_update_report(
     return ApiResponse(
         success=True,
         message="Cập nhật trạng thái báo cáo thành công",
+        data=result
+    )
+
+
+@router.delete("/reports/{report_id}", response_model=ApiResponse, summary="Xóa báo cáo")
+async def admin_delete_report(
+    report_id: str,
+    admin_uid: str = Depends(get_admin_user)
+):
+    """
+    Xóa vĩnh viễn một báo cáo khỏi hệ thống.
+    - Dành cho Admin khi báo cáo bị trùng, không hợp lệ hoặc đã xử lý xong.
+    """
+    result = await FirestoreService.delete_report(
+        report_id=report_id,
+        admin_uid=admin_uid
+    )
+    return ApiResponse(
+        success=True,
+        message="Xóa báo cáo thành công",
         data=result
     )
 
