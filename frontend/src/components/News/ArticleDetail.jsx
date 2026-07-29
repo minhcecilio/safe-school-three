@@ -683,9 +683,9 @@ export default function ArticleDetail() {
 
         {article.summary && <div className="detail-summary-box"><p>{article.summary}</p></div>}
 
-        <div className="detail-body-content">
+        <div className="detail-body-content tinymce-content">
           {article.content
-            ? article.content.split('\n').map((p, i) => p.trim() !== '' ? <p key={i}>{p}</p> : <br key={i} />)
+            ? <div dangerouslySetInnerHTML={{ __html: article.content }} />
             : <p>Không có nội dung bài viết.</p>
           }
         </div>

@@ -15,8 +15,8 @@ const stats = [
 const features = [
   {
     id: 'articles',
-    title: 'Bài viết kiến thức',
-    desc: 'Tìm hiểu kiến thức về phòng chống bạo lực học đường, kỹ năng ứng phó và bảo vệ bản thân.',
+    title: 'Bài viết',
+    desc: 'Tìm hiểu kiến thức về phòng chống bạo lực học đường, kỹ năng ứng phó để bảo vệ bản thân, xây dựng một môi trường lành mạnh.',
     route: '/articles',
     icon: (
       <svg viewBox="0 0 24 24" fill="none">
@@ -27,7 +27,7 @@ const features = [
   {
     id: 'reports',
     title: 'Báo cáo bảo mật',
-    desc: 'Gửi phản ánh nhanh chóng, bảo mật về các hành vi bạo lực, bắt nạt hoặc không an toàn.',
+    desc: 'Gửi phản ánh cấp tốc, bảo mật về các hành vi bạo lực, bắt nạt hoặc không an toàn.',
     route: '/reports',
     icon: (
       <svg viewBox="0 0 24 24" fill="none">
@@ -38,7 +38,7 @@ const features = [
   {
     id: 'consultation',
     title: 'Đặt lịch tham vấn',
-    desc: 'Đặt lịch hẹn trao đổi trực tiếp với các chuyên gia tâm lý học đường giàu kinh nghiệm.',
+    desc: 'Đặt lịch hẹn trao đổi trực tiếp với các chuyên gia tâm lý học đường giàu lòng nhân ái.',
     route: '/consultation',
     icon: (
       <svg viewBox="0 0 24 24" fill="none">
@@ -49,7 +49,7 @@ const features = [
   {
     id: 'chat',
     title: 'Hỗ trợ trò chuyện',
-    desc: 'Kênh chat trực tuyến bảo mật tuyệt đối 1-1 với tư vấn viên hỗ trợ khẩn cấp.',
+    desc: 'Kênh chat trực tuyến bảo mật tương đối giữa các người dùng.',
     route: '/chat',
     icon: (
       <svg viewBox="0 0 24 24" fill="none">
@@ -60,7 +60,7 @@ const features = [
   {
     id: 'notifications',
     title: 'Hộp thư thông báo',
-    desc: 'Nhận tin tức mới nhất, cảnh báo an toàn học đường và lịch trình hoạt động của hệ thống.',
+    desc: 'Cập nhật thông tin mới nhất về các luồng hoạt động của hệ thống (sự tương tác, trạng thái bài viết,...).',
     route: '/notifications',
     icon: (
       <svg viewBox="0 0 24 24" fill="none">
@@ -126,8 +126,8 @@ export default function Home() {
             </h1>
 
             <p className="hero-description">
-              Safe School đồng hành cùng học sinh, phụ huynh và nhà trường trong việc phòng chống
-              bạo lực học đường, cung cấp kiến thức bảo vệ bản thân và kênh kết nối nhanh chóng
+              Safe School đồng hành cùng học sinh, phụ huynh và nhà trường trong công cuộc
+              xây dựng một môi trường không bạo lực học đường, cung cấp kiến thức liên quan và kết nối nhanh chóng
               với các chuyên gia tâm lý học.
             </p>
 
@@ -169,7 +169,7 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="glass-title">Chuyên gia túc trực</p>
-                  <p className="glass-subtitle">Hỗ trợ 24/7 hoàn toàn ẩn danh</p>
+                  <p className="glass-subtitle">Hỗ trợ 24/7 hoàn toàn tiện lợi</p>
                 </div>
               </div>
             </div>
@@ -203,7 +203,7 @@ export default function Home() {
           <div className="section-header">
             <h2 className="section-title">Chức Năng Nổi Bật</h2>
             <p className="section-subtitle">
-              Cung cấp các công cụ và tài nguyên tối ưu giúp quản lý, tiếp cận thông tin an toàn học đường dễ dàng.
+              Tổng hợp các chức năng nổi bật làm nên tên tuổi của hệ thống
             </p>
           </div>
 
@@ -231,7 +231,7 @@ export default function Home() {
           <div className="section-header">
             <h2 className="section-title">Bài Viết Nổi Bật</h2>
             <p className="section-subtitle">
-              Cập nhật kiến thức bổ ích và những kỹ năng sống quan trọng từ đội ngũ chuyên gia hàng đầu.
+              Cập nhật kiến thức bổ ích và những kỹ năng sống quan trọng từ đội ngũ chuyên gia hàng đầu hay từ những người dùng có hiểu biết về vấn đề.
             </p>
           </div>
 
@@ -269,8 +269,7 @@ export default function Home() {
             <div className="cta-banner-content">
               <h2 className="cta-title">Bạn Đang Gặp Vấn Đề Khó Khăn Cần Giúp Đỡ?</h2>
               <p className="cta-desc">
-                Đừng im lặng. Hãy chia sẻ với Safe School hoặc kết nối trực tiếp với Tổng đài
-                Quốc gia Bảo vệ Trẻ em để nhận được sự trợ giúp bảo mật, kịp thời nhất.
+                LẶNG IM ĐẾN LÚC NÀO!!! CHÚNG TÔI SẼ GIÚP ĐỠ KHÓ KHĂN CỦA BẠN TRONG KHẢ NĂNG.
               </p>
             </div>
             <div className="cta-banner-actions">
@@ -278,7 +277,7 @@ export default function Home() {
                 🚨 Gửi báo cáo khẩn cấp
               </button>
               <a href="tel:111" className="btn btn-secondary-white">
-                📞 Gọi Tổng đài 111 (Miễn phí)
+                📞 Gọi Tổng đài bảo kê trẻ em
               </a>
             </div>
           </div>

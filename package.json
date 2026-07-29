@@ -19,6 +19,9 @@
   },
   "homepage": "https://github.com/minhcecilio/safe-school-three#readme",
   "dependencies": {
-    "firebase": "^12.16.0"
-  }
+    "@tinymce/tinymce-react": "^6.3.0",
+    "firebase": "^12.16.0",
+    "tinymce": "^8.8.2"
+  },
+  "allowScripts": {}
 }

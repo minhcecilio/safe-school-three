@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Editor } from '@tinymce/tinymce-react';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   createArticleService,
@@ -29,6 +30,7 @@ export default function CreatePost() {
   const { id } = useParams(); // If present, edit mode
   const navigate = useNavigate();
   const { user } = useAuth();
+  const editorRef = useRef(null);
 
   const isEditMode = Boolean(id);
 
@@ -45,6 +47,7 @@ export default function CreatePost() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [fetchingArticle, setFetchingArticle] = useState(false);
+  const [editorReady, setEditorReady] = useState(false);
 
   // If edit mode, load article details
   useEffect(() => {
@@ -52,6 +55,62 @@ export default function CreatePost() {
       fetchExistingArticle();
     }
   }, [id]);
+
+  const editorInitConfig = React.useMemo(() => ({
+    license_key: 'gpl',   // Required for TinyMCE 7+ GPL Community edition
+    height: 540,
+    menubar: false,
+    branding: false,
+    promotion: false,
+    plugins: [
+      'advlist', 'autolink', 'lists', 'link', 'image',
+      'charmap', 'preview', 'anchor', 'searchreplace',
+      'visualblocks', 'code', 'fullscreen', 'insertdatetime',
+      'media', 'table', 'help', 'wordcount'
+    ],
+    toolbar:
+      'undo redo | ' +
+      'fontfamily fontsize | ' +
+      'bold italic underline strikethrough | ' +
+      'forecolor backcolor | ' +
+      'alignleft aligncenter alignright alignjustify | ' +
+      'bullist numlist | ' +
+      'link image table blockquote code | ' +
+      'removeformat | fullscreen preview',
+    toolbar_sticky: true,
+    content_style: `
+      body {
+        font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.7;
+        color: #1e293b;
+        padding: 16px 20px;
+      }
+      img { max-width: 100%; height: auto; border-radius: 6px; }
+      table { border-collapse: collapse; width: 100%; }
+      table td, table th { border: 1px solid #e2e8f0; padding: 8px 12px; }
+      table th { background-color: #f1f5f9; font-weight: 600; }
+      blockquote {
+        border-left: 4px solid #3b82f6;
+        margin: 0;
+        padding: 10px 16px;
+        background: #f0f7ff;
+        border-radius: 0 6px 6px 0;
+        color: #475569;
+        font-style: italic;
+      }
+      pre { background: #1e293b; color: #e2e8f0; padding: 12px 16px; border-radius: 6px; overflow-x: auto; }
+      a { color: #2563eb; }
+    `,
+    language: 'vi',
+    resize: true,
+    image_advtab: true,
+    link_assume_external_targets: true,
+    automatic_uploads: false,
+    // Prevent issues with relative URLs for assets
+    skin_url: '/tinymce/skins/ui/oxide',
+    content_css: '/tinymce/skins/content/default/content.min.css',
+  }), []);
 
   const fetchExistingArticle = async () => {
     setFetchingArticle(true);
@@ -96,6 +155,14 @@ export default function CreatePost() {
     }
   };
 
+  // Called by TinyMCE on every content change
+  const handleEditorChange = (content) => {
+    setFormData(prev => ({ ...prev, content }));
+    if (errors.content) {
+      setErrors(prev => ({ ...prev, content: '' }));
+    }
+  };
+
   const validate = () => {
     const errs = {};
     if (!formData.title.trim()) {
@@ -104,7 +171,11 @@ export default function CreatePost() {
     if (!formData.summary.trim()) {
       errs.summary = 'Vui lòng nhập mô tả ngắn.';
     }
-    if (!formData.content.trim()) {
+    // Get current content from editor if available
+    const currentContent = editorRef.current
+      ? editorRef.current.getContent()
+      : formData.content;
+    if (!currentContent || !currentContent.replace(/<[^>]*>/g, '').trim()) {
       errs.content = 'Vui lòng nhập nội dung chi tiết bài viết.';
     }
     setErrors(errs);
@@ -119,24 +190,31 @@ export default function CreatePost() {
       return;
     }
 
+    // Sync latest editor content before validation
+    const editorContent = editorRef.current
+      ? editorRef.current.getContent()
+      : formData.content;
+    const updatedFormData = { ...formData, content: editorContent };
+    setFormData(updatedFormData);
+
     if (!validate()) return;
 
     setLoading(true);
 
-    const tagsArray = formData.tagsInput
-      ? formData.tagsInput.split(',').map(t => t.trim()).filter(Boolean)
+    const tagsArray = updatedFormData.tagsInput
+      ? updatedFormData.tagsInput.split(',').map(t => t.trim()).filter(Boolean)
       : [];
 
     const payload = {
-      title: formData.title.trim(),
-      category: formData.category,
-      summary: formData.summary.trim(),
-      content: formData.content.trim(),
-      coverImage: formData.coverImage.trim() || 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=600&q=80',
+      title: updatedFormData.title.trim(),
+      category: updatedFormData.category,
+      summary: updatedFormData.summary.trim(),
+      content: editorContent,           // HTML from TinyMCE
+      coverImage: updatedFormData.coverImage.trim() || 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=600&q=80',
       tags: tagsArray,
-      visibility: formData.visibility,
+      visibility: updatedFormData.visibility,
       // Status always pending — moderation required for all roles
-      status: isEditMode ? (formData.status || 'pending') : 'pending',
+      status: isEditMode ? (updatedFormData.status || 'pending') : 'pending',
     };
 
     try {
@@ -281,20 +359,27 @@ export default function CreatePost() {
           )}
         </div>
 
-        {/* Full Content */}
+        {/* Full Content — TinyMCE Editor */}
         <div className="form-group">
-          <label className="form-label" htmlFor="content">
+          <label className="form-label" htmlFor="content-editor">
             Nội dung chi tiết <span className="text-required">*</span>
           </label>
-          <textarea
-            id="content"
-            name="content"
-            rows="10"
-            className={`form-input ${errors.content ? 'input-error' : ''}`}
-            placeholder="Viết nội dung đầy đủ của bài viết tại đây. Mỗi dòng xuống hàng sẽ được tạo thành một đoạn văn mới..."
-            value={formData.content}
-            onChange={handleChange}
-          />
+          <div
+            id="content-editor"
+            className={`tinymce-wrapper ${errors.content ? 'tinymce-error' : ''}`}
+          >
+            <Editor
+              // Use self-hosted TinyMCE from /public/tinymce (no API key required)
+              tinymceScriptSrc="/tinymce/tinymce.min.js"
+              onInit={(evt, editor) => {
+                editorRef.current = editor;
+                setEditorReady(true);
+              }}
+              initialValue={isEditMode ? formData.content : undefined}
+              init={editorInitConfig}
+              onEditorChange={handleEditorChange}
+            />
+          </div>
           {errors.content && <span className="error-message">{errors.content}</span>}
         </div>
 
