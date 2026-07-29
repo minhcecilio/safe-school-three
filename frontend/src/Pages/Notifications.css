@@ -199,6 +199,17 @@
 }
 
 /* Empty state */
+.notifications-inline-banner {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background-color: #fff7ed;
+  color: #9a2c0a;
+  border: 1px solid #fdba74;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
 .notifications-empty {
   padding: 48px 24px;
   text-align: center;
@@ -289,6 +300,23 @@
 }
 
 /* Content */
+.notifications-item-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notifications-item-main--unread {
+  cursor: pointer;
+}
+
 .notifications-item-body {
   flex: 1;
   min-width: 0;

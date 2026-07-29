@@ -17,6 +17,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, description="Trạng thái hoạt động của tài khoản")
     role: Optional[str] = Field(None, description="Vai trò: admin, teacher, student, counselor")
     is_anonymous: Optional[bool] = Field(None, description="Trạng thái ẩn danh")
+    reason: Optional[str] = Field(None, description="Lý do gửi kèm khi khóa hoặc xóa tài khoản")
 
 class UserResponse(BaseModel):
     """Schema thông tin user trả về cho Admin (Đã loại bỏ mật khẩu)"""
@@ -60,12 +61,22 @@ class ReportUpdate(BaseModel):
     status: str = Field(..., description="Trạng thái báo cáo: 'processing', 'resolved', 'rejected'")
     resolution: Optional[str] = Field("", description="Ghi chú kết quả xử lý báo cáo")
 
+class ReportCreate(BaseModel):
+    """Schema gửi báo cáo mới từ người dùng"""
+    title: str = Field(..., description="Tiêu đề báo cáo")
+    description: Optional[str] = Field(None, description="Mô tả chi tiết báo cáo")
+    priority: Optional[str] = Field("normal", description="Mức ưu tiên: sos, high, normal, low")
+    location: Optional[str] = Field(None, description="Địa điểm xảy ra sự việc")
+    type: Optional[str] = Field("report", description="Loại báo cáo: report hoặc sos_emergency")
+    targetId: Optional[str] = Field(None, description="Đối tượng liên quan nếu có")
+
 class ReportResponse(BaseModel):
     """Schema phản hồi thông tin báo cáo"""
     id: str
     title: Optional[str] = None
     description: Optional[str] = None
     reporterId: Optional[str] = None
+    reporterName: Optional[str] = None
     targetId: Optional[str] = None
     priority: str = "normal"  # SOS, high, normal, low
     status: str = "pending"   # pending, processing, resolved, rejected

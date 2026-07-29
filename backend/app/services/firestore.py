@@ -79,7 +79,7 @@ class FirestoreService:
             raise HTTPException(status_code=500, detail=f"Lỗi lấy danh sách user: {str(e)}")
 
     @staticmethod
-    async def update_user(uid: str, update_dict: Dict[str, Any], admin_uid: str) -> Dict[str, Any]:
+    async def update_user(uid: str, update_dict: Dict[str, Any], admin_uid: str, reason: Optional[str] = None) -> Dict[str, Any]:
         """Cập nhật trạng thái/vai trò của người dùng và ghi nhận nhật ký"""
         db = get_firestore_db()
         if not db:
@@ -91,9 +91,45 @@ class FirestoreService:
         if not user_doc.exists:
             raise HTTPException(status_code=404, detail="User không tồn tại")
 
+        #Lấy thông tin user
+        user_data = user_doc.to_dict()
+        user_email = user_data.get("email")
+        user_display_name = user_data.get("displayName")
+        
         # Thêm thời gian cập nhật
-        update_dict["updatedAt"] = datetime.now().isoformat()
-        user_ref.update(update_dict)
+        update_payload = dict(update_dict)
+        update_payload["updatedAt"] = datetime.now().isoformat()
+        user_ref.update(update_payload)
+
+        if "is_active" in update_dict and update_dict.get("is_active") is False:
+            await NotificationService.create_notification(
+                user_id=uid,
+                title="🔒 Tài khoản của bạn đã bị khóa",
+                message=f"Tài khoản của bạn đã bị khóa bởi quản trị viên. {f' Lý do: {reason}' if reason else ''}",
+                notification_type="account_updated"
+            )
+            
+        elif "role" in update_dict:
+            await NotificationService.create_notification(
+                user_id=uid,
+                title="Cập nhật vai trò tài khoản",
+                message=f"Vai trò của bạn đã được cập nhật thành {update_dict.get('role', 'mới')}.",
+                notification_type="account_updated"
+            )
+        elif "is_active" in update_dict and update_dict.get("is_active") is True:
+            await NotificationService.create_notification(
+                user_id=uid,
+                title="🔓 Tài khoản của bạn đã được mở khóa",
+                message=f"Tài khoản của bạn đã được mở khóa bởi quản trị viên",
+                notification_type="account_updated"
+            )
+        elif "is_anonymous" in update_dict:
+            await NotificationService.create_notification(
+                user_id=uid,
+                title="Cập nhật trạng thái ẩn danh",
+                message="Trạng thái ẩn danh của tài khoản đã được thay đổi.",
+                notification_type="account_updated"
+            )
 
         # Log hành động admin
         await FirestoreService.log_admin_action(
@@ -107,7 +143,7 @@ class FirestoreService:
         return {"uid": uid, "updated": update_dict}
 
     @staticmethod
-    async def delete_user(uid: str, admin_uid: str) -> Dict[str, Any]:
+    async def delete_user(uid: str, admin_uid: str, reason: Optional[str] = None) -> Dict[str, Any]:
         """Xóa vĩnh viễn tài khoản người dùng khỏi Firestore và Firebase Auth"""
         db = get_firestore_db()
         if not db:
@@ -139,6 +175,50 @@ class FirestoreService:
         )
 
         return {"uid": uid, "deleted": True}
+
+    @staticmethod
+    async def create_report(report_data: Dict[str, Any], reporter_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Tạo báo cáo mới vào Firestore và gửi thông báo nếu cần."""
+        db = get_firestore_db()
+        if not db:
+            raise HTTPException(status_code=500, detail="Không có kết nối tới cơ sở dữ liệu")
+
+        report_payload = {
+            "title": report_data.get("title", "Báo cáo không có tiêu đề"),
+            "description": report_data.get("description", ""),
+            "priority": str(report_data.get("priority", "normal")).lower(),
+            "type": report_data.get("type", "report"),
+            "location": report_data.get("location", ""),
+            "targetId": report_data.get("targetId", None),
+            "status": "pending",
+            "resolution": "",
+            "createdAt": datetime.now().isoformat(),
+            "updatedAt": datetime.now().isoformat(),
+            "sosAlertSent": False,
+        }
+
+        if reporter_info:
+            report_payload["reporterId"] = reporter_info.get("uid")
+            report_payload["reporterName"] = reporter_info.get("name") or reporter_info.get("displayName") or reporter_info.get("email")
+            report_payload["reporterEmail"] = reporter_info.get("email")
+
+        try:
+            report_ref = db.collection("reports").add(report_payload)
+            report_id = report_ref[1].id if isinstance(report_ref, tuple) else report_ref.id
+        except Exception as e:
+            logger.error(f"❌ Lỗi khi lưu báo cáo vào Firestore: {e}")
+            raise HTTPException(status_code=500, detail="Không thể lưu báo cáo vào hệ thống")
+
+        created_report = {"id": report_id, **report_payload}
+
+        # Nếu là báo cáo SOS, gửi alert admin
+        report_type = str(report_payload.get("type", "")).lower()
+        report_priority = str(report_payload.get("priority", "")).upper()
+        is_sos_report = report_type == "sos_emergency" or report_priority == "SOS"
+        if is_sos_report:
+            await FirestoreService._send_pending_sos_alert(report_id, created_report)
+
+        return created_report
 
     # ==================== QUẢN LÝ BÀI VIẾT / ARTICLES ====================
 
@@ -309,7 +389,26 @@ class FirestoreService:
     # ==================== QUẢN LÝ BÁO CÁO & SOS KHẨN CẤP ====================
 
     @staticmethod
-    async def get_all_reports(status_filter: str = "all") -> List[Dict[str, Any]]:
+    async def _send_pending_sos_alert(report_id: str, report_data: Dict[str, Any]) -> None:
+        """Gửi email SOS một lần cho admin khi báo cáo SOS được phát hiện."""
+        try:
+            if str(report_data.get("priority", "")).upper() != "SOS":
+                return
+            if report_data.get("sosAlertSent") is True:
+                return
+
+            db = get_firestore_db()
+            if not db:
+                return
+
+            sent = await NotificationService.send_sos_alert(report_id, report_data)
+            if sent:
+                db.collection("reports").document(report_id).update({"sosAlertSent": True})
+        except Exception as e:
+            logger.error(f"❌ Lỗi khi gửi email SOS cho báo cáo {report_id}: {e}")
+
+    @staticmethod
+    async def get_all_reports(status_filter: str = "all", priority_filter: str = "all") -> List[Dict[str, Any]]:
         """
         Lấy danh sách báo cáo vi phạm/bạo lực.
         Antigravity: Ưu tiên báo cáo SOS lên đầu danh sách (SOS > high > normal > low).
@@ -328,8 +427,33 @@ class FirestoreService:
 
             for doc in docs:
                 data = doc.to_dict()
+                report_type = str(data.get("type", "")).lower()
+                report_priority = str(data.get("priority", "")).upper()
+                is_sos_report = report_type == "sos_emergency" or report_priority == "SOS"
+
+                if priority_filter != "all":
+                    priority_filter_norm = priority_filter.lower()
+                    if priority_filter_norm == "sos":
+                        if not is_sos_report:
+                            continue
+                    elif report_priority.lower() != priority_filter_norm:
+                        continue
+
                 data["id"] = doc.id
+                data["priority"] = "SOS" if is_sos_report else data.get("priority", "normal")
+
+                created = data.get("createdAt")
+                if hasattr(created, "toDate"):
+                    data["createdAt"] = created.toDate().isoformat()
+                elif hasattr(created, "isoformat"):
+                    data["createdAt"] = created.isoformat()
+                elif not created:
+                    data["createdAt"] = datetime.now().isoformat()
+
                 reports.append(data)
+
+                if is_sos_report and data.get("sosAlertSent") is not True:
+                    await FirestoreService._send_pending_sos_alert(doc.id, data)
 
             # Quy đổi mức độ ưu tiên để sắp xếp
             priority_weight = {
@@ -366,13 +490,21 @@ class FirestoreService:
         if not report_doc.exists:
             raise HTTPException(status_code=404, detail="Báo cáo không tồn tại")
 
+        report_data = report_doc.to_dict() or {}
         update_data = {
             "status": status_val,
             "resolution": resolution or "",
             "updatedAt": datetime.now().isoformat(),
             "updatedBy": admin_uid
         }
+
         report_ref.update(update_data)
+
+        report_type = str(report_data.get("type", "")).lower()
+        report_priority = str(report_data.get("priority", "")).upper()
+        is_sos_report = report_type == "sos_emergency" or report_priority == "SOS"
+        if is_sos_report and report_data.get("sosAlertSent") is not True:
+            await FirestoreService._send_pending_sos_alert(report_id, report_data)
 
         # Log admin
         await FirestoreService.log_admin_action(
@@ -385,6 +517,41 @@ class FirestoreService:
 
         return {"id": report_id, "status": status_val}
 
+    @staticmethod
+    async def delete_report(report_id: str, admin_uid: str) -> Dict[str, Any]:
+        """Xóa một báo cáo khỏi Firestore và ghi lại hành động Admin."""
+        db = get_firestore_db()
+        if not db:
+            raise HTTPException(status_code=500, detail="Không có kết nối tới cơ sở dữ liệu")
+
+        report_ref = db.collection("reports").document(report_id)
+        report_doc = report_ref.get()
+
+        if not report_doc.exists:
+            raise HTTPException(status_code=404, detail="Báo cáo không tồn tại")
+
+        report_data = report_doc.to_dict() or {}
+        report_title = report_data.get("title", "Báo cáo không có tiêu đề")
+
+        report_ref.delete()
+
+        await FirestoreService.log_admin_action(
+            admin_uid=admin_uid,
+            action="DELETE_REPORT",
+            target_type="report",
+            target_id=report_id,
+            details={
+                "report_title": report_title,
+                "deleted_at": datetime.now().isoformat()
+            }
+        )
+
+        return {
+            "report_id": report_id,
+            "title": report_title,
+            "deleted": True
+        }
+
     # ==================== DASHBOARD & REAL-TIME STATS ====================
 
     @staticmethod
@@ -396,7 +563,6 @@ class FirestoreService:
         db = get_firestore_db()
         if not db:
             return _stats_cache
-
         try:
             users_count = len(list(db.collection("users").stream()))
 
@@ -417,7 +583,11 @@ class FirestoreService:
 
             reports_count = len(list(db.collection("reports").stream()))
             pending_reports = len(list(db.collection("reports").where("status", "==", "pending").stream()))
-            sos_reports = len(list(db.collection("reports").where("priority", "in", ["SOS", "sos"]).stream()))
+            sos_reports = 0
+            for report_doc in db.collection("reports").stream():
+                doc_data = report_doc.to_dict() or {}
+                if str(doc_data.get("priority", "")).upper() == "SOS" or str(doc_data.get("type", "")).lower() == "sos_emergency":
+                    sos_reports += 1
 
             _stats_cache = {
                 "users": users_count,

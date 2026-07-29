@@ -16,6 +16,7 @@ const ManageUsers = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [modalType, setModalType] = useState(null); // 'toggle' | 'delete'
   const [showModal, setShowModal] = useState(false);
+  const [reasonInput, setReasonInput] = useState('');
   const [toast, setToast] = useState({ message: '', type: 'info' });
 
   const fetchUsersList = async () => {
@@ -42,6 +43,7 @@ const ManageUsers = () => {
   const handleOpenToggleStatusModal = (user) => {
     setSelectedUser(user);
     setModalType('toggle');
+    setReasonInput('');
     setShowModal(true);
   };
 
@@ -49,11 +51,12 @@ const ManageUsers = () => {
   const handleOpenDeleteModal = (user) => {
     setSelectedUser(user);
     setModalType('delete');
+    setReasonInput('');
     setShowModal(true);
   };
 
   // Thực thi Khóa/Mở khóa hoặc Xóa user
-  const handleConfirmAction = async () => {
+  const handleConfirmAction = async (reasonText = '') => {
     if (!selectedUser || !modalType) return;
 
     if (modalType === 'toggle') {
@@ -61,6 +64,7 @@ const ManageUsers = () => {
       try {
         await updateUser(selectedUser.uid, {
           is_active: newActiveState,
+          reason: reasonText?.trim() || undefined,
         });
 
         setToast({
@@ -73,13 +77,14 @@ const ManageUsers = () => {
         setShowModal(false);
         setSelectedUser(null);
         setModalType(null);
+        setReasonInput('');
         fetchUsersList();
       } catch (err) {
         setToast({ message: 'Lỗi cập nhật trạng thái user: ' + err.message, type: 'error' });
       }
     } else if (modalType === 'delete') {
       try {
-        await deleteUser(selectedUser.uid);
+        await deleteUser(selectedUser.uid, reasonText?.trim() || '');
 
         setToast({
           message: `Đã xóa vĩnh viễn tài khoản [${selectedUser.displayName || selectedUser.email}] thành công!`,
@@ -89,6 +94,7 @@ const ManageUsers = () => {
         setShowModal(false);
         setSelectedUser(null);
         setModalType(null);
+        setReasonInput('');
         fetchUsersList();
       } catch (err) {
         setToast({ message: 'Lỗi khi xóa tài khoản: ' + err.message, type: 'error' });
@@ -130,6 +136,8 @@ const ManageUsers = () => {
         message: `Bạn có CỰC KỲ CHẮC CHẮN muốn XÓA VĨNH VIỄN tài khoản "${selectedUser?.displayName || selectedUser?.email}"? Thao tác này sẽ xóa tài khoản khỏi Firebase Auth & Firestore và KHÔNG THỂ HOÀN TÁC!`,
         variant: 'danger',
         confirmText: 'Xóa Vĩnh Viễn',
+        inputPlaceholder: 'Nhập lý do xóa tài khoản (nếu có)...',
+        requireInput: true,
       };
     }
     const isActive = selectedUser?.is_active ?? true;
@@ -140,6 +148,8 @@ const ManageUsers = () => {
         : `Bạn có chắc chắn muốn MỞ KHÓA tài khoản "${selectedUser?.displayName || selectedUser?.email}"?`,
       variant: isActive ? 'danger' : 'success',
       confirmText: isActive ? 'Khóa Tài Khoản' : 'Mở Khóa',
+      inputPlaceholder: isActive ? 'Nhập lý do khóa tài khoản...' : 'Nhập lý do mở khóa tài khoản (nếu có)...',
+      requireInput: isActive,
     };
   };
 
@@ -157,11 +167,18 @@ const ManageUsers = () => {
         variant={modalProps.variant}
         confirmText={modalProps.confirmText}
         cancelText="Hủy"
-        onConfirm={handleConfirmAction}
+        inputPlaceholder={modalProps.inputPlaceholder}
+        initialInputValue={reasonInput}
+        requireInput={modalProps.requireInput}
+        onConfirm={(value) => {
+          setReasonInput(value || '');
+          handleConfirmAction(value || '');
+        }}
         onCancel={() => {
           setShowModal(false);
           setSelectedUser(null);
           setModalType(null);
+          setReasonInput('');
         }}
       />
 
