@@ -1,7 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import './Home.css';
 
@@ -25,13 +23,24 @@ const features = [
     ),
   },
   {
+    id: 'sos',
+    title: 'Trợ giúp SOS Khẩn cấp',
+    desc: 'Phát tín hiệu cứu trợ tức thì và kích hoạt quy trình bảo vệ khẩn cấp 24/7.',
+    route: '/sos',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
     id: 'reports',
     title: 'Báo cáo bảo mật',
     desc: 'Gửi phản ánh cấp tốc, bảo mật về các hành vi bạo lực, bắt nạt hoặc không an toàn.',
     route: '/reports',
     icon: (
       <svg viewBox="0 0 24 24" fill="none">
-        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
@@ -98,17 +107,7 @@ const articles = [
 ];
 
 export default function Home() {
-  const navigate = useNavigate();
   const { user } = useAuth();
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
 
   return (
     <div className="home-page fade-in">
@@ -132,21 +131,25 @@ export default function Home() {
             </p>
 
             <div className="hero-actions">
-              <button className="btn btn-primary" onClick={() => navigate('/articles')}>
+              <Link to="/sos" className="btn btn-danger">
+                🚨 TRỢ GIÚP SOS KHẨN CẤP
+              </Link>
+
+              <Link to="/articles" className="btn btn-primary">
                 Khám phá bài viết
                 <svg className="btn-icon" viewBox="0 0 24 24" fill="none">
                   <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </button>
+              </Link>
 
               {user ? (
-                <button className="btn btn-secondary" onClick={() => navigate('/consultation')}>
+                <Link to="/consultation" className="btn btn-secondary">
                   Đặt lịch tham vấn
-                </button>
+                </Link>
               ) : (
-                <button className="btn btn-secondary" onClick={() => navigate('/login')}>
+                <Link to="/login" className="btn btn-secondary">
                   Đăng nhập để bắt đầu
-                </button>
+                </Link>
               )}
             </div>
           </div>
@@ -209,7 +212,7 @@ export default function Home() {
 
           <div className="features-grid">
             {features.map((feat) => (
-              <div key={feat.id} className="feature-card" onClick={() => navigate(feat.route)}>
+              <Link key={feat.id} to={feat.route} className="feature-card" style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div className="feature-icon-box">{feat.icon}</div>
                 <h3 className="feature-card-title">{feat.title}</h3>
                 <p className="feature-card-desc">{feat.desc}</p>
@@ -219,7 +222,7 @@ export default function Home() {
                     <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -249,12 +252,12 @@ export default function Home() {
                   </div>
                   <h3 className="article-card-title">{art.title}</h3>
                   <p className="article-card-desc">{art.desc}</p>
-                  <button className="article-btn-more" onClick={() => navigate('/articles')}>
+                  <Link to="/articles" className="article-btn-more">
                     Xem thêm
                     <svg className="arrow-icon" viewBox="0 0 24 24" fill="none">
                       <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                  </button>
+                  </Link>
                 </div>
               </article>
             ))}
@@ -273,9 +276,9 @@ export default function Home() {
               </p>
             </div>
             <div className="cta-banner-actions">
-              <button className="btn btn-danger" onClick={() => navigate('/reports')}>
-                🚨 Gửi báo cáo khẩn cấp
-              </button>
+              <Link to="/sos" className="btn btn-danger">
+                🚨 Gửi báo cáo khẩn cấp (SOS)
+              </Link>
               <a href="tel:111" className="btn btn-secondary-white">
                 📞 Gọi Tổng đài bảo kê trẻ em
               </a>

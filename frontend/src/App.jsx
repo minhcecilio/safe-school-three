@@ -16,6 +16,7 @@ import Profile from './Pages/Profile';
 import Chat from './Pages/Chat';
 import Login from './Pages/Login';
 import Register from './Pages/Register';
+import SOS from "./Pages/SOS";
 
 // Admin Layout & Pages
 import AdminLayout from './components/Layout/AdminLayout';
@@ -26,7 +27,6 @@ import ManageReports from './Pages/admin/ManageReports';
 import ManageChat from './Pages/admin/ManageChat';
 import './Pages/Notifications.css';
 
-// Routes that should NOT show the main public Header/Footer chrome
 const NOTIFICATION_ICONS = {
   sos_alert: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -43,7 +43,6 @@ const NOTIFICATION_ICONS = {
   ),
 };
 
-// Routes that should NOT show the main public Header/Footer chrome
 const NO_CHROME_ROUTES = ['/register', '/login'];
 
 function NotificationsPlaceholder() {
@@ -254,11 +253,9 @@ function ConsultationPlaceholder() {
   );
 }
 
-// Inner shell — reads current path to decide whether to show public Header/Footer
 function AppShell() {
   const { pathname } = useLocation();
 
-  // Không hiển thị Header/Footer công khai nếu ở trang đăng nhập, đăng ký hoặc trong Admin Panel
   const isNoChrome = NO_CHROME_ROUTES.includes(pathname) || pathname.startsWith('/admin');
 
   return (
@@ -274,6 +271,9 @@ function AppShell() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
+          {/* Trang SOS đã được gắn trực tiếp component SOS */}
+          <Route path="/sos" element={<SOS />} />
+
           {/* Protected User Routes */}
           <Route path="/articles/create" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
           <Route path="/articles/edit/:id" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
@@ -285,7 +285,7 @@ function AppShell() {
           <Route path="/notifications" element={<ProtectedRoute><NotificationsPlaceholder /></ProtectedRoute>} />
           <Route path="/consultation" element={<ConsultationPlaceholder />} />
 
-          {/* Protected Admin Routes — only moderator roles (admin, teacher, expert…) */}
+          {/* Protected Admin Routes */}
           <Route
             path="/admin"
             element={
