@@ -1,7 +1,9 @@
 import logging
-import smtplib
 import os
+import smtplib
 from datetime import datetime
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from typing import Optional, Dict, Any
 from app.config.firebase import get_firestore_db
 
@@ -65,27 +67,62 @@ class NotificationService:
             smtp_port = int(os.getenv("SMTP_PORT", "587"))
             smtp_user = os.getenv("SMTP_USER")
             smtp_password = os.getenv("SMTP_PASSWORD")
-            admin_email = os.getenv("ADMIN_NOTIFICATION_EMAIL", smtp_user)
+            sender_email = os.getenv("SENDER_EMAIL", smtp_user)
+            admin_emails = []
+            env_admin_emails = os.getenv("ADMIN_NOTIFICATION_EMAIL")
+            if env_admin_emails:
+                admin_emails.extend([email.strip() for email in env_admin_emails.split(",") if email.strip()])
 
-            if smtp_server and smtp_user and smtp_password and admin_email:
+            if db:
+                admins = db.collection("users").where("role", "==", "admin").stream()
+                for admin_doc in admins:
+                    admin_value = admin_doc.to_dict() or {}
+                    email = admin_value.get("email")
+                    if email:
+                        admin_emails.append(email)
+
+            admin_emails = list(dict.fromkeys([e for e in admin_emails if e]))
+            if not admin_emails and smtp_user:
+                admin_emails = [smtp_user]
+
+            if smtp_server and smtp_user and smtp_password and sender_email and admin_emails:
+                subject = f"[SafeSchool SOS ALERT] Báo cáo bạo lực khẩn cấp #{report_id}"
+                body_lines = [
+                    "Kính gửi Ban Quản Trị SafeSchool,",
+                    "",
+                    "Hệ thống phát hiện một báo cáo KHẨN CẤP (SOS):",
+                    f"- Mã báo cáo: {report_id}",
+                    f"- Tiêu đề: {report_data.get('title', 'N/A')}",
+                    f"- Người báo cáo: {report_data.get('reporterName') or report_data.get('reporterId', 'N/A')}",
+                    f"- Email người báo cáo: {report_data.get('user_email', 'N/A')}",
+                    f"- Vị trí: {report_data.get('location', 'N/A')}",
+                    f"- Mức độ ưu tiên: {report_data.get('priority', 'N/A')}",
+                    f"- Nội dung: {report_data.get('description', 'N/A')}",
+                    f"- Thời gian tạo: {report_data.get('createdAt', datetime.now().isoformat())}",
+                    "",
+                    "Vui lòng truy cập trang Quản Trị để xử lý ngay lập tức!",
+                ]
+                body = "\n".join(body_lines)
+
+                msg = MIMEMultipart()
+                msg["From"] = sender_email
+                msg["To"] = ", ".join(admin_emails)
+                msg["Subject"] = subject
+                msg.attach(MIMEText(body, "plain", "utf-8"))
+
                 try:
-                    subject = f"[SafeSchool SOS ALERT] Báo cáo bạo lực khẩn cấp #{report_id}"
-                    body = (
-                        f"Kính gửi Ban Quản Trị SafeSchool,\n\n"
-                        f"Hệ thống phát hiện một báo cáo KHẨN CẤP (SOS):\n"
-                        f"- Mã báo cáo: {report_id}\n"
-                        f"- Tiêu đề: {report_data.get('title', 'N/A')}\n"
-                        f"- Nội dung: {report_data.get('description', 'N/A')}\n"
-                        f"- Thời gian: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                        f"Vui lòng truy cập trang Quản Trị để xử lý ngay lập tức!"
-                    )
-                    email_text = f"Subject: {subject}\n\n{body}"
+                    if smtp_port == 465:
+                        smtp_client = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=30)
+                    else:
+                        smtp_client = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
+                        smtp_client.ehlo()
+                        smtp_client.starttls()
+                        smtp_client.ehlo()
 
-                    with smtplib.SMTP(smtp_server, smtp_port) as server:
-                        server.starttls()
-                        server.login(smtp_user, smtp_password)
-                        server.sendmail(smtp_user, [admin_email], email_text.encode('utf-8'))
-                    logger.info(f"📧 Đã gửi email cảnh báo SOS tới Admin: {admin_email}")
+                    with smtp_client:
+                        smtp_client.login(smtp_user, smtp_password)
+                        smtp_client.sendmail(sender_email, admin_emails, msg.as_string())
+                    logger.info(f"📧 Đã gửi email cảnh báo SOS tới Admin: {admin_emails}")
                 except Exception as mail_err:
                     logger.error(f"⚠️ Lỗi gửi email cảnh báo SOS qua SMTP: {mail_err}")
 

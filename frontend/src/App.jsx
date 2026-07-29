@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { collection, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { collection, deleteDoc, doc, getDoc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/Common/ProtectedRoute';
 import Header from './components/Layout/Header';
@@ -35,6 +35,35 @@ const NOTIFICATION_ICONS = {
       <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   ),
+  chat_message: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  ),
+  article_like: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3z" />
+      <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+    </svg>
+  ),
+  article_comment: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  ),
+  article_favorite: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  ),
+  admin: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 8h10" />
+      <path d="M7 12h10" />
+      <path d="M7 16h6" />
+    </svg>
+  ),
   default: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -48,8 +77,12 @@ const NO_CHROME_ROUTES = ['/register', '/login'];
 
 function NotificationsPlaceholder() {
   const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState('all');
+  const [noticeMessage, setNoticeMessage] = useState('');
 
   useEffect(() => {
     if (!user?.uid) {
@@ -184,45 +217,87 @@ function NotificationsPlaceholder() {
               type="search"
               className="notifications-search-input"
               placeholder="Tìm kiếm thông báo..."
-              disabled
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
               aria-label="Tìm kiếm thông báo"
             />
           </div>
-          <div className="notifications-filters" aria-hidden="true">
-            <span className="notifications-filter notifications-filter--active">Tất cả</span>
-            <span className="notifications-filter">Chưa đọc</span>
-            <span className="notifications-filter">Đã đọc</span>
+          <div className="notifications-filters">
+            <button
+              type="button"
+              className={`notifications-filter${filterMode === 'all' ? ' notifications-filter--active' : ''}`}
+              onClick={() => setFilterMode('all')}
+            >
+              Tất cả
+            </button>
+            <button
+              type="button"
+              className={`notifications-filter${filterMode === 'unread' ? ' notifications-filter--active' : ''}`}
+              onClick={() => setFilterMode('unread')}
+            >
+              Chưa đọc
+            </button>
+            <button
+              type="button"
+              className={`notifications-filter${filterMode === 'read' ? ' notifications-filter--active' : ''}`}
+              onClick={() => setFilterMode('read')}
+            >
+              Đã đọc
+            </button>
           </div>
         </div>
+
+        {noticeMessage && (
+          <div className="notifications-inline-banner" role="status">
+            {noticeMessage}
+          </div>
+        )}
 
         <div className="notifications-card notifications-list-card">
           {visibleNotifications.length === 0 ? (
             <div className="notifications-empty">
-              <p>Hiện chưa có thông báo nào cho tài khoản này.</p>
+              <p>Không có thông báo nào phù hợp với bộ lọc hiện tại.</p>
             </div>
           ) : (
             <ul className="notifications-list">
               {visibleNotifications.map((item) => {
                 const isUnread = item.read === false;
                 const isAlert = item.type === 'sos_alert';
+                const iconType = item.type === 'chat_message'
+                  ? 'chat_message'
+                  : item.type === 'article_like' || item.type === 'article_comment' || item.type === 'article_favorite'
+                    ? 'article_like'
+                    : item.type === 'system' && item.relatedType === 'chat_room'
+                      ? 'chat_message'
+                      : isAlert
+                        ? 'sos_alert'
+                        : item.type === 'admin' || item.title?.toLowerCase().includes('admin')
+                          ? 'admin'
+                          : 'default';
 
                 return (
                   <li
                     key={item.id}
                     className={`notifications-item${isUnread ? ' notifications-item--unread' : ''}`}
                   >
-                    <div className={`notifications-item-icon${isAlert ? ' notifications-item-icon--alert' : ''}`}>
-                      {NOTIFICATION_ICONS[isAlert ? 'sos_alert' : 'default']}
-                    </div>
-                    <div className="notifications-item-body">
-                      <h3 className="notifications-item-title">{item.title || 'Thông báo mới'}</h3>
-                      <p className="notifications-item-message">{item.message || 'Không có nội dung'}</p>
-                      {item.createdAt && (
-                        <div className="notifications-item-footer">
-                          <span className="notifications-item-time">{formatTime(item.createdAt)}</span>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      className={`notifications-item-main${isUnread ? ' notifications-item-main--unread' : ''}`}
+                      onClick={() => handleOpenNotification(item)}
+                    >
+                      <div className={`notifications-item-icon${isAlert ? ' notifications-item-icon--alert' : ''}`}>
+                        {NOTIFICATION_ICONS[iconType] || NOTIFICATION_ICONS.default}
+                      </div>
+                      <div className="notifications-item-body">
+                        <h3 className="notifications-item-title">{item.title || 'Thông báo mới'}</h3>
+                        <p className="notifications-item-message">{item.message || 'Không có nội dung'}</p>
+                        {item.createdAt && (
+                          <div className="notifications-item-footer">
+                            <span className="notifications-item-time">{formatTime(item.createdAt)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </button>
                     <button
                       type="button"
                       className="notifications-item-delete"

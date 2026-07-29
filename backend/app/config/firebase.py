@@ -1,7 +1,10 @@
 import os
 import logging
 import firebase_admin
+from dotenv import load_dotenv
 from firebase_admin import credentials, firestore, auth
+
+load_dotenv()
 
 logger = logging.getLogger("safeschool.firebase")
 
