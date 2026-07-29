@@ -70,6 +70,13 @@ export const AuthProvider = ({ children }) => {
                     }
 
                     unsubscribeSnapshot = onSnapshot(userDocRef, (userDoc) => {
+                        const defaultNotifSettings = {
+                            article_comment: true,
+                            comment_reply: true,
+                            article_like: true,
+                            article_favorite: true,
+                        };
+
                         if (userDoc.exists()) {
                             const userData = userDoc.data();
                             setUser({
@@ -83,6 +90,10 @@ export const AuthProvider = ({ children }) => {
                                 emailVerified: firebaseUser.emailVerified || false,
                                 isAnonymous: userData?.is_anonymous || false,
                                 lastLogin: userData?.lastLogin || null,
+                                notificationSettings: {
+                                    ...defaultNotifSettings,
+                                    ...(userData?.notificationSettings || userData?.notification_settings || {}),
+                                },
                             });
                         } else {
                             setUser({
@@ -92,6 +103,7 @@ export const AuthProvider = ({ children }) => {
                                 avatarUrl: firebaseUser.photoURL || '',
                                 role: 'student',
                                 isAnonymous: false,
+                                notificationSettings: defaultNotifSettings,
                             });
                         }
                         setLoading(false);
@@ -104,6 +116,7 @@ export const AuthProvider = ({ children }) => {
                             avatarUrl: firebaseUser.photoURL || '',
                             role: 'student',
                             isAnonymous: false,
+                            notificationSettings: defaultNotifSettings,
                         });
                         setLoading(false);
                     });
