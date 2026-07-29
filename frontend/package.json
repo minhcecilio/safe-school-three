@@ -10,11 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tinymce/tinymce-react": "^6.3.0",
     "axios": "^1.18.1",
     "firebase": "^12.16.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.1"
+    "react-router-dom": "^7.18.1",
+    "tinymce": "^8.8.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

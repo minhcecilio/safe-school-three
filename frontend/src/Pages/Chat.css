@@ -365,3 +365,348 @@
     min-height: 400px;
   }
 }
+
+/* ──────────────────────────────────────────
+   Role Badges
+────────────────────────────────────────── */
+.role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.role-student  { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
+.role-teacher  { background: rgba(16, 185, 129, 0.12); color: #059669; }
+.role-parent   { background: rgba(245, 158, 11, 0.12); color: #d97706; }
+.role-expert   { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
+.role-admin    { background: rgba(239, 68, 68, 0.12);  color: #dc2626; }
+
+.msg-role-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 6px;
+  text-transform: uppercase;
+}
+
+/* ──────────────────────────────────────────
+   Chat Tabs
+────────────────────────────────────────── */
+.chat-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--gray-medium);
+  padding-bottom: 0;
+  overflow-x: auto;
+}
+
+.chat-tab-btn {
+  padding: 10px 18px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--gray-text);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  margin-bottom: -2px;
+  border-radius: 6px 6px 0 0;
+}
+
+.chat-tab-btn:hover {
+  color: var(--primary);
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.chat-tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.chat-tab-content {
+  animation: fadeIn 0.25s ease;
+}
+
+/* ──────────────────────────────────────────
+   Create Room Modal (custom)
+────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+  backdrop-filter: blur(4px);
+}
+
+.create-room-modal {
+  background: var(--white);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  width: 500px;
+  max-width: 95vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--gray-medium);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--dark-text);
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gray-light);
+  color: var(--gray-text);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.modal-close:hover { background: var(--gray-medium); }
+
+.modal-body {
+  padding: 20px 24px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--dark-text);
+}
+
+.form-desc {
+  font-size: 0.88rem;
+  color: var(--gray-text);
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--gray-medium);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.form-input:focus { border-color: var(--primary-light); }
+
+.modal-footer {
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-medium);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.btn-modal-cancel {
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--gray-text);
+  background: var(--gray-light);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-modal-cancel:hover { background: var(--gray-medium); }
+
+.btn-modal-confirm {
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--white);
+  background: var(--primary-light);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-modal-confirm:hover:not(:disabled) { background: var(--primary); }
+.btn-modal-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.selected-count {
+  font-size: 0.8rem;
+  color: var(--gray-text);
+  flex: 1;
+}
+
+/* ──────────────────────────────────────────
+   User Filter Tabs (inside modal)
+────────────────────────────────────────── */
+.user-filter-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.filter-tab {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--gray-light);
+  color: var(--gray-text);
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1.5px solid transparent;
+}
+
+.filter-tab:hover { background: var(--gray-medium); }
+.filter-tab.active {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary);
+  border-color: var(--primary-light);
+}
+
+/* ──────────────────────────────────────────
+   User Picker List
+────────────────────────────────────────── */
+.loading-users,
+.no-users {
+  text-align: center;
+  padding: 20px;
+  color: var(--gray-text);
+  font-size: 0.88rem;
+}
+
+.user-pick-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 260px;
+  border: 1px solid var(--gray-medium);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-pick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.user-pick-item:hover { background: var(--gray-light); }
+
+.user-pick-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.user-pick-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.user-pick-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--dark-text);
+}
+
+/* ──────────────────────────────────────────
+   Teacher Room Banner
+────────────────────────────────────────── */
+.teacher-room-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.teacher-room-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  border-radius: 12px;
+  color: white;
+}
+
+.teacher-room-banner-icon {
+  font-size: 2.5rem;
+}
+
+.teacher-room-banner h2 {
+  color: white;
+  font-size: 1.2rem;
+  margin-bottom: 4px;
+}
+
+.teacher-room-banner p {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.teacher-room-badge {
+  margin-left: auto;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+

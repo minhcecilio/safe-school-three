@@ -6,8 +6,10 @@ import {
   deleteDoc,
   getDoc,
   setDoc,
+  getDocs,
   query,
   orderBy,
+  where,
   onSnapshot,
   serverTimestamp,
   arrayUnion,
@@ -15,6 +17,42 @@ import {
 import { db } from '../firebase/config';
 
 const ROOMS_COLLECTION = 'chatRooms';
+
+// Room types
+export const ROOM_TYPES = {
+  CONSULTATION: 'consultation',   // Expert creates from registration list
+  STUDENT_GROUP: 'student_group', // Student creates group with other students
+  TEACHER_ONLY: 'teacher_only',   // Default teacher-only room
+  GENERAL: 'general',             // General room (legacy)
+};
+
+// Teacher-only room ID (fixed)
+export const TEACHER_ROOM_ID = 'teacher-lounge';
+
+/**
+ * Ensure the default teacher-only room exists in Firestore.
+ * Called once at app startup (or when a teacher visits the chat page).
+ */
+export async function ensureTeacherRoom() {
+  const roomRef = doc(db, ROOMS_COLLECTION, TEACHER_ROOM_ID);
+  const roomSnap = await getDoc(roomRef);
+  if (!roomSnap.exists()) {
+    await setDoc(roomRef, {
+      title: 'Phòng Giáo Viên',
+      createdBy: 'system',
+      createdByName: 'Hệ thống',
+      status: 'open',
+      type: ROOM_TYPES.TEACHER_ONLY,
+      allowedRoles: ['teacher', 'admin', 'expert'],
+      participantIds: [],
+      createdAt: serverTimestamp(),
+      lastMessageAt: serverTimestamp(),
+      lastMessage: '',
+      isDefault: true,
+    });
+  }
+  return TEACHER_ROOM_ID;
+}
 
 export function subscribeToRooms(callback, statusFilter = null) {
   const q = query(collection(db, ROOMS_COLLECTION), orderBy('lastMessageAt', 'desc'));
@@ -30,6 +68,56 @@ export function subscribeToRooms(callback, statusFilter = null) {
     },
     (error) => {
       console.error('Lỗi lấy danh sách phòng chat:', error);
+      callback([]);
+    }
+  );
+}
+
+/**
+ * Subscribe to rooms filtered by type (and optionally status).
+ * Filters in memory to avoid requiring a Firestore composite index.
+ */
+export function subscribeToRoomsByType(type, callback, statusFilter = null) {
+  const q = query(
+    collection(db, ROOMS_COLLECTION),
+    orderBy('lastMessageAt', 'desc')
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      let rooms = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      rooms = rooms.filter((r) => r.type === type);
+      if (statusFilter && statusFilter !== 'all') {
+        rooms = rooms.filter((r) => r.status === statusFilter);
+      }
+      callback(rooms);
+    },
+    (error) => {
+      console.error('Lỗi lấy danh sách phòng theo loại:', error);
+      callback([]);
+    }
+  );
+}
+
+/**
+ * Subscribe to rooms where the user is a participant.
+ */
+export function subscribeToMyRooms(userId, callback) {
+  const q = query(
+    collection(db, ROOMS_COLLECTION),
+    where('participantIds', 'array-contains', userId),
+    orderBy('lastMessageAt', 'desc')
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const rooms = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(rooms);
+    },
+    (error) => {
+      console.error('Lỗi lấy phòng của tôi:', error);
       callback([]);
     }
   );
@@ -54,17 +142,24 @@ export function subscribeToMessages(roomId, callback) {
   );
 }
 
-export async function createChatRoom({ title, userId, userName, userRole }) {
-  const roomRef = await addDoc(collection(db, ROOMS_COLLECTION), {
+export async function createChatRoom({ title, userId, userName, userRole, type = ROOM_TYPES.GENERAL, invitedUserIds = [], allowedRoles = null }) {
+  const roomData = {
     title: title.trim(),
     createdBy: userId,
     createdByName: userName,
     status: 'open',
-    participantIds: [userId],
+    type,
+    participantIds: [userId, ...invitedUserIds.filter((id) => id !== userId)],
     createdAt: serverTimestamp(),
     lastMessageAt: serverTimestamp(),
     lastMessage: '',
-  });
+  };
+
+  if (allowedRoles) {
+    roomData.allowedRoles = allowedRoles;
+  }
+
+  const roomRef = await addDoc(collection(db, ROOMS_COLLECTION), roomData);
 
   await addDoc(collection(db, ROOMS_COLLECTION, roomRef.id, 'messages'), {
     senderId: 'system',
@@ -77,7 +172,38 @@ export async function createChatRoom({ title, userId, userName, userRole }) {
   return roomRef.id;
 }
 
-export async function joinChatRoom(roomId, userId) {
+/**
+ * Expert creates a consultation room from a registration list.
+ * invitedUserIds: array of user IDs (students, teachers, parents) from registrations.
+ */
+export async function createExpertRoom({ title, expertId, expertName, invitedUserIds = [] }) {
+  return createChatRoom({
+    title,
+    userId: expertId,
+    userName: expertName,
+    userRole: 'expert',
+    type: ROOM_TYPES.CONSULTATION,
+    invitedUserIds,
+  });
+}
+
+/**
+ * Student creates a group chat with other students.
+ * invitedStudentIds: array of student UIDs.
+ */
+export async function createStudentGroup({ title, creatorId, creatorName, invitedStudentIds = [] }) {
+  return createChatRoom({
+    title,
+    userId: creatorId,
+    userName: creatorName,
+    userRole: 'student',
+    type: ROOM_TYPES.STUDENT_GROUP,
+    invitedUserIds: invitedStudentIds,
+    allowedRoles: ['student'],
+  });
+}
+
+export async function joinChatRoom(roomId, userId, userRole = 'student') {
   const roomRef = doc(db, ROOMS_COLLECTION, roomId);
   const roomSnap = await getDoc(roomRef);
 
@@ -88,6 +214,11 @@ export async function joinChatRoom(roomId, userId) {
   const room = roomSnap.data();
   if (room.status === 'closed') {
     throw new Error('Phòng chat đã được đóng');
+  }
+
+  // Check role restriction
+  if (room.allowedRoles && !room.allowedRoles.includes(userRole)) {
+    throw new Error('Bạn không có quyền tham gia phòng này');
   }
 
   if (!room.participantIds?.includes(userId)) {
@@ -168,6 +299,20 @@ export async function getUserPresence(userId) {
 
 export async function deleteChatRoom(roomId) {
   await deleteDoc(doc(db, ROOMS_COLLECTION, roomId));
+}
+
+/**
+ * Fetch all users from Firestore for expert to pick from registration list.
+ */
+export async function fetchUsers(roleFilter = null) {
+  let q;
+  if (roleFilter) {
+    q = query(collection(db, 'users'), where('role', '==', roleFilter));
+  } else {
+    q = query(collection(db, 'users'));
+  }
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
 export function formatTimestamp(timestamp) {
