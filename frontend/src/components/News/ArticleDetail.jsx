@@ -442,7 +442,19 @@ export default function ArticleDetail() {
         updatedAt: serverTimestamp(),
       };
       await addDoc(collection(db, 'comments'), newReply);
-      // onSnapshot will auto-update comments list
+
+      // Send notification to parent comment author if not current user
+      const parentCmt = comments.find(c => c.id === parentId);
+      if (parentCmt?.userId && parentCmt.userId !== user.uid) {
+        await createNotification({
+          userId: parentCmt.userId,
+          title: 'Có phản hồi cho bình luận của bạn',
+          message: `${user.displayName || 'Một người dùng'} vừa trả lời bình luận của bạn trong bài viết "${article?.title || 'bài viết'}".`,
+          type: 'comment_reply',
+          relatedId: id,
+          relatedType: 'article',
+        });
+      }
     } catch (err) {
       console.error('Error adding reply:', err);
       alert('Không thể gửi trả lời. Vui lòng thử lại.');

@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Avatar from '../User/Avatar';
+import NotificationSettingsModal from '../Notifications/NotificationSettingsModal';
 import './Header.css';
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isNotifSettingsOpen, setIsNotifSettingsOpen] = useState(false);
 
   const { user } = useAuth();
   const location = useLocation();
@@ -51,6 +53,11 @@ export default function Header() {
   const handleFavoritesClick = () => {
     setIsDropdownOpen(false);
     navigate('/articles?filter=favorites');
+  };
+
+  const handleNotificationSettingsClick = () => {
+    setIsDropdownOpen(false);
+    setIsNotifSettingsOpen(true);
   };
 
   const handleToggleAnonymous = async () => {
@@ -156,6 +163,9 @@ export default function Header() {
                   <button className="dropdown-item" onClick={handleFavoritesClick}>
                     ❤️ Bài viết yêu thích
                   </button>
+                  <button className="dropdown-item" onClick={handleNotificationSettingsClick}>
+                    🔔 Cài đặt thông báo
+                  </button>
                   <button className="dropdown-item" onClick={handleToggleAnonymous}>
                     👤 {user.isAnonymous ? 'Tắt chế độ ẩn danh' : 'Bật chế độ ẩn danh'}
                   </button>
@@ -176,6 +186,12 @@ export default function Header() {
           </button>
         </div>
       </div>
+
+      {/* Notification Settings Modal */}
+      <NotificationSettingsModal
+        isOpen={isNotifSettingsOpen}
+        onClose={() => setIsNotifSettingsOpen(false)}
+      />
     </header>
   );
 }

@@ -115,6 +115,18 @@ function NotificationsPlaceholder() {
     }
   };
 
+  const TOGGLEABLE_TYPES = ['article_comment', 'comment_reply', 'article_like', 'article_favorite'];
+
+  const visibleNotifications = notifications.filter((item) => {
+    if (item.type && TOGGLEABLE_TYPES.includes(item.type)) {
+      const settings = user?.notificationSettings || {};
+      if (settings[item.type] === false) {
+        return false;
+      }
+    }
+    return true;
+  });
+
   if (authLoading || loading) {
     return (
       <div className="notifications-loading">
@@ -145,18 +157,18 @@ function NotificationsPlaceholder() {
 
         <div className="notifications-stats">
           <div className="notifications-stat">
-            <span className="notifications-stat-value">{notifications.length}</span>
+            <span className="notifications-stat-value">{visibleNotifications.length}</span>
             <span className="notifications-stat-label">Tổng thông báo</span>
           </div>
           <div className="notifications-stat notifications-stat--unread">
             <span className="notifications-stat-value">
-              {notifications.filter((item) => item.read === false).length}
+              {visibleNotifications.filter((item) => item.read === false).length}
             </span>
             <span className="notifications-stat-label">Chưa đọc</span>
           </div>
           <div className="notifications-stat notifications-stat--read">
             <span className="notifications-stat-value">
-              {notifications.filter((item) => item.read !== false).length}
+              {visibleNotifications.filter((item) => item.read !== false).length}
             </span>
             <span className="notifications-stat-label">Đã đọc</span>
           </div>
@@ -184,13 +196,13 @@ function NotificationsPlaceholder() {
         </div>
 
         <div className="notifications-card notifications-list-card">
-          {notifications.length === 0 ? (
+          {visibleNotifications.length === 0 ? (
             <div className="notifications-empty">
               <p>Hiện chưa có thông báo nào cho tài khoản này.</p>
             </div>
           ) : (
             <ul className="notifications-list">
-              {notifications.map((item) => {
+              {visibleNotifications.map((item) => {
                 const isUnread = item.read === false;
                 const isAlert = item.type === 'sos_alert';
 
