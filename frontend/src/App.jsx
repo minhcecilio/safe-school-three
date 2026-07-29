@@ -148,57 +148,16 @@ function NotificationsPlaceholder() {
     }
   };
 
-  const handleOpenNotification = async (item) => {
-    if (!item?.id) return;
+  const TOGGLEABLE_TYPES = ['article_comment', 'comment_reply', 'article_like', 'article_favorite'];
 
-    if (item.read !== true) {
-      try {
-        await updateDoc(doc(db, 'notifications', item.id), { read: true });
-      } catch (error) {
-        console.error('Lỗi cập nhật trạng thái đọc thông báo:', error);
+  const visibleNotifications = notifications.filter((item) => {
+    if (item.type && TOGGLEABLE_TYPES.includes(item.type)) {
+      const settings = user?.notificationSettings || {};
+      if (settings[item.type] === false) {
+        return false;
       }
     }
-
-    if (item.relatedType === 'article' && item.relatedId) {
-      try {
-        const articleRef = await getDoc(doc(db, 'articles', item.relatedId));
-        if (articleRef.exists()) {
-          setNoticeMessage('');
-          navigate(`/articles/${item.relatedId}`);
-        } else {
-          setNoticeMessage('Bài viết này không còn tồn tại.');
-        }
-      } catch (error) {
-        console.error('Lỗi kiểm tra bài viết:', error);
-        setNoticeMessage('Không thể mở bài viết này lúc này.');
-      }
-      return;
-    }
-
-    if (item.relatedType === 'chat_room' && item.relatedId) {
-      try {
-        const roomRef = await getDoc(doc(db, 'chatRooms', item.relatedId));
-        if (roomRef.exists()) {
-          setNoticeMessage('');
-          navigate('/chat');
-        } else {
-          setNoticeMessage('Phòng chat này không còn tồn tại.');
-        }
-      } catch (error) {
-        console.error('Lỗi kiểm tra phòng chat:', error);
-        setNoticeMessage('Không thể mở phòng chat này lúc này.');
-      }
-      return;
-    }
-  };
-
-  const filteredNotifications = notifications.filter((item) => {
-    const haystack = `${item.title || ''} ${item.message || ''}`.toLowerCase();
-    const matchesSearch = !searchQuery.trim() || haystack.includes(searchQuery.trim().toLowerCase());
-    const matchesFilter = filterMode === 'all'
-      || (filterMode === 'unread' ? item.read === false : item.read !== false);
-
-    return matchesSearch && matchesFilter;
+    return true;
   });
 
   if (authLoading || loading) {
@@ -231,18 +190,18 @@ function NotificationsPlaceholder() {
 
         <div className="notifications-stats">
           <div className="notifications-stat">
-            <span className="notifications-stat-value">{notifications.length}</span>
+            <span className="notifications-stat-value">{visibleNotifications.length}</span>
             <span className="notifications-stat-label">Tổng thông báo</span>
           </div>
           <div className="notifications-stat notifications-stat--unread">
             <span className="notifications-stat-value">
-              {notifications.filter((item) => item.read === false).length}
+              {visibleNotifications.filter((item) => item.read === false).length}
             </span>
             <span className="notifications-stat-label">Chưa đọc</span>
           </div>
           <div className="notifications-stat notifications-stat--read">
             <span className="notifications-stat-value">
-              {notifications.filter((item) => item.read !== false).length}
+              {visibleNotifications.filter((item) => item.read !== false).length}
             </span>
             <span className="notifications-stat-label">Đã đọc</span>
           </div>
@@ -295,13 +254,13 @@ function NotificationsPlaceholder() {
         )}
 
         <div className="notifications-card notifications-list-card">
-          {filteredNotifications.length === 0 ? (
+          {visibleNotifications.length === 0 ? (
             <div className="notifications-empty">
               <p>Không có thông báo nào phù hợp với bộ lọc hiện tại.</p>
             </div>
           ) : (
             <ul className="notifications-list">
-              {filteredNotifications.map((item) => {
+              {visibleNotifications.map((item) => {
                 const isUnread = item.read === false;
                 const isAlert = item.type === 'sos_alert';
                 const iconType = item.type === 'chat_message'
