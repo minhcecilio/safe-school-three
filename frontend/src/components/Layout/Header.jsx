@@ -55,33 +55,33 @@ export default function Header() {
     navigate('/articles?filter=favorites');
   };
 
-  HEAD
   const handleNotificationSettingsClick = () => {
     setIsDropdownOpen(false);
     setIsNotifSettingsOpen(true);
-    const handleSOSClick = () => {
-      setIsDropdownOpen(false);
-      navigate('/sos');
+  };
 
-    };
+  const handleSOSClick = () => {
+    setIsDropdownOpen(false);
+    navigate('/sos');
+  };
 
-    const handleToggleAnonymous = async () => {
-      setIsDropdownOpen(false);
-      if (!user) return;
-      try {
-        const { db } = await import('../../firebase/config');
-        const { doc, updateDoc } = await import('firebase/firestore');
-        const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          is_anonymous: !user.isAnonymous
-        });
-      } catch (err) {
-        console.error('Lỗi khi bật/tắt chế độ ẩn danh:', err);
-        alert('Không thể cập nhật chế độ ẩn danh. Vui lòng thử lại.');
-      }
-    };
+  const handleToggleAnonymous = async () => {
+    setIsDropdownOpen(false);
+    if (!user) return;
+    try {
+      const { db } = await import('../../firebase/config');
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        is_anonymous: !user.isAnonymous
+      });
+    } catch (err) {
+      console.error('Lỗi khi bật/tắt chế độ ẩn danh:', err);
+      alert('Không thể cập nhật chế độ ẩn danh. Vui lòng thử lại.');
+    }
+  };
 
-    return (
+  return (
       <header className={`app-header ${isScrolled ? 'scrolled' : ''}`}>
         <div className="container header-container">
 
