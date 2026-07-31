@@ -5,10 +5,11 @@ from app.dependencies.auth import get_admin_user
 from app.models.schemas import (
     UserUpdate, UserResponse,
     PostApprove, PostResponse,
-    ReportUpdate, ReportResponse,
+    ReportUpdate, ReportResponse, ReportAssignRequest, ReportStatusUpdateRequest,
     StatisticsResponse, ApiResponse
 )
 from app.services.firestore import FirestoreService
+from app.services.sla_worker import SLAEscalationEngine
 
 logger = logging.getLogger("safeschool.router.admin")
 
@@ -163,7 +164,62 @@ async def admin_get_reports(
     )
 
 
-@router.put("/reports/{report_id}", response_model=ApiResponse, summary="Cập nhật trạng thái báo cáo")
+@router.get("/handlers", response_model=ApiResponse, summary="Lấy danh sách cán bộ có thể phân công xử lý (Admin & Tham vấn viên)")
+async def admin_get_handlers(admin_uid: str = Depends(get_admin_user)):
+    """
+    Trả về danh sách cán bộ xử lý sự cố (bao gồm các tài khoản có vai trò Admin, Counselor - Tham vấn viên, Teacher).
+    """
+    handlers = await FirestoreService.get_available_handlers()
+    return ApiResponse(
+        success=True,
+        message=f"Lấy thành công {len(handlers)} cán bộ xử lý",
+        data=handlers
+    )
+
+
+
+
+@router.post("/reports/{report_id}/assign", response_model=ApiResponse, summary="Phân công người xử lý")
+async def admin_assign_report(report_id: str, payload: ReportAssignRequest, admin_uid: str = Depends(get_admin_user)):
+    result = await FirestoreService.assign_report(report_id, payload.assigneeId, admin_uid, payload.note or "")
+    return ApiResponse(message="Phân công báo cáo thành công", data=result)
+
+
+@router.put("/reports/{report_id}/status", response_model=ApiResponse, summary="Cập nhật trạng thái báo cáo")
+async def admin_update_report_status(report_id: str, payload: ReportStatusUpdateRequest, admin_uid: str = Depends(get_admin_user)):
+    result = await FirestoreService.update_report_status(report_id, payload.status, payload.resolution, admin_uid, progress_note=payload.note)
+    return ApiResponse(message="Cập nhật trạng thái thành công", data=result)
+
+
+@router.delete("/reports/{report_id}/soft-delete", response_model=ApiResponse, summary="Xóa mềm báo cáo")
+async def admin_soft_delete_report(report_id: str, admin_uid: str = Depends(get_admin_user)):
+    return ApiResponse(message="Đã chuyển báo cáo vào thùng rác", data=await FirestoreService.soft_delete_report(report_id, admin_uid))
+
+
+@router.put("/reports/{report_id}/restore", response_model=ApiResponse, summary="Khôi phục báo cáo")
+async def admin_restore_report(report_id: str, admin_uid: str = Depends(get_admin_user)):
+    return ApiResponse(message="Khôi phục báo cáo thành công", data=await FirestoreService.restore_report(report_id, admin_uid))
+
+
+@router.get("/reports/search", response_model=ApiResponse, summary="Tìm kiếm báo cáo nâng cao")
+async def admin_search_reports(
+    q: str = Query(""), status_filter: str = Query("all", alias="status"),
+    assignee: str = Query(""), report_type: str = Query("", alias="type"),
+    priority: str = Query("all"), date_from: str = Query("", alias="from"),
+    date_to: str = Query("", alias="to"), include_deleted: bool = Query(False),
+    sort_by: str = Query("createdAt"), sort_order: str = Query("desc"),
+    admin_uid: str = Depends(get_admin_user)
+):
+    data = await FirestoreService.search_reports(q, status_filter, assignee, report_type, priority, date_from, date_to, include_deleted, sort_by, sort_order)
+    return ApiResponse(message=f"Tìm thấy {len(data)} báo cáo", data=data)
+
+
+@router.get("/reports/{report_id}/suggest-assignees", response_model=ApiResponse, summary="Gợi ý người xử lý")
+async def admin_suggest_assignees(report_id: str, admin_uid: str = Depends(get_admin_user)):
+    return ApiResponse(message="Gợi ý người xử lý phù hợp", data=await FirestoreService.suggest_assignees(report_id))
+
+
+@router.put("/reports/{report_id}", response_model=ApiResponse, summary="Cập nhật trạng thái, phân công & tiến độ xử lý báo cáo")
 async def admin_update_report(
     report_id: str,
     report_data: ReportUpdate,
@@ -171,7 +227,9 @@ async def admin_update_report(
 ):
     """
     Cập nhật luồng xử lý báo cáo: `pending` → `processing` → `resolved` (hoặc `rejected`).
-    - Ghi nhận thông tin người cập nhật và ghi log hệ thống.
+    - Phân công cán bộ xử lý (Admin hoặc Tham vấn viên).
+    - Cập nhật tiến độ xử lý hiện tại (nhiều nấc / timeline).
+    - Ghi nhận nhật ký audit log.
     """
     if report_data.status not in ["pending", "processing", "resolved", "rejected"]:
         raise HTTPException(status_code=400, detail="Trạng thái báo cáo không hợp lệ")
@@ -180,16 +238,20 @@ async def admin_update_report(
         report_id=report_id,
         status_val=report_data.status,
         resolution=report_data.resolution,
-        admin_uid=admin_uid
+        admin_uid=admin_uid,
+        assigned_to=report_data.assignedTo,
+        assigned_to_name=report_data.assignedToName,
+        assigned_to_role=report_data.assignedToRole,
+        progress_note=report_data.progressNote
     )
     return ApiResponse(
         success=True,
-        message="Cập nhật trạng thái báo cáo thành công",
+        message="Cập nhật trạng thái & phân công xử lý thành công",
         data=result
     )
 
 
-@router.delete("/reports/{report_id}", response_model=ApiResponse, summary="Xóa báo cáo")
+@router.delete("/reports/{report_id}", response_model=ApiResponse, summary="Xóa mềm báo cáo (API tương thích)")
 async def admin_delete_report(
     report_id: str,
     admin_uid: str = Depends(get_admin_user)
@@ -204,7 +266,23 @@ async def admin_delete_report(
     )
     return ApiResponse(
         success=True,
-        message="Xóa báo cáo thành công",
+        message="Đã chuyển báo cáo vào thùng rác",
+        data=result
+    )
+
+
+@router.post("/reports/check-sla", response_model=ApiResponse, summary="Kích hoạt kiểm tra & Leo thang SLA thủ công/định kỳ")
+async def admin_check_sla(admin_uid: str = Depends(get_admin_user)):
+    """
+    **Antigravity SLA Escalation Engine**:
+    - Quét toàn bộ báo cáo pending và processing.
+    - Phát hiện vi phạm thời gian SLA (2h tiếp nhận / 24h giải quyết).
+    - Tự động leo thang (Escalate) và gửi cảnh báo tới BGH.
+    """
+    result = await SLAEscalationEngine.check_and_escalate_reports()
+    return ApiResponse(
+        success=True,
+        message="Đã hoàn tất kiểm tra và leo thang SLA",
         data=result
     )
 

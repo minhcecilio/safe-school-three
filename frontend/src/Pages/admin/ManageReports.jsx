@@ -1,523 +1,167 @@
-import React, { useState, useEffect } from 'react';
-import { getReports, updateReport, deleteReport } from '../../api/admin';
-import Modal from '../../components/Common/Modal';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  assignReport, getHandlers, restoreReport, searchReports,
+  softDeleteReport, suggestAssignees, updateReportStatus,
+} from '../../api/admin';
 import Toast from '../../components/Common/Toast';
 
-const ManageReports = () => {
+const initialFilters = {
+  q: '', status: 'all', assignee: '', type: '', priority: 'all',
+  from: '', to: '', sort_by: 'createdAt', sort_order: 'desc', include_deleted: false,
+};
+
+const ManageReports = ({ currentUser }) => {
   const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
-
-  // Modal State
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [actionStatus, setActionStatus] = useState(null); // 'processing' | 'resolved'
-  const [showModal, setShowModal] = useState(false);
-
+  const [handlers, setHandlers] = useState([]);
+  const [filters, setFilters] = useState(initialFilters);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [assigneeId, setAssigneeId] = useState('');
+  const [note, setNote] = useState('');
   const [toast, setToast] = useState({ message: '', type: 'info' });
 
-  const fetchReportsList = async () => {
+  const load = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const res = await getReports(statusFilter, priorityFilter);
-      if (res && res.data) {
-        setReports(res.data);
-      }
-    } catch (err) {
-      console.error('Lỗi lấy báo cáo:', err);
-      setError(err.message || 'Không thể tải danh sách báo cáo');
+      const [reportRes, handlerRes] = await Promise.all([
+        searchReports(filters), getHandlers(),
+      ]);
+      setReports(reportRes.data?.data || reportRes.data || []);
+      setHandlers(handlerRes.data?.data || handlerRes.data || []);
+    } catch (error) {
+      setToast({ message: error.message || 'Không thể tải dữ liệu', type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchReportsList();
-  }, [statusFilter, priorityFilter]);
+  useEffect(() => { load(); }, [filters.status, filters.assignee, filters.type, filters.priority,
+    filters.from, filters.to, filters.sort_by, filters.sort_order, filters.include_deleted]);
 
-  // Mở modal cập nhật trạng thái báo cáo
-  const handleOpenReportModal = (report, targetStatus) => {
-    setSelectedReport(report);
-    setActionStatus(targetStatus);
-    setShowModal(true);
-  };
+  const myReports = useMemo(
+    () => reports.filter((r) => r.assignedTo === currentUser?.uid),
+    [reports, currentUser?.uid],
+  );
 
-  // Xác nhận cập nhật báo cáo
-  const handleConfirmReportAction = async (resolutionNotes) => {
-    if (!selectedReport || !actionStatus) return;
+  const overdueCount = myReports.filter((r) =>
+    r.sla?.isResponseOverdue || r.sla?.isResolutionOverdue || r.sla?.isEscalated).length;
 
+  const submitSearch = (event) => { event.preventDefault(); load(); };
+
+  const openAssign = async (report) => {
+    setSelected(report); setAssigneeId(report.assignedTo || ''); setNote('');
     try {
-      await updateReport(selectedReport.id, {
-        status: actionStatus,
-        resolution: resolutionNotes || '',
-      });
-
-      const statusLabels = {
-        processing: 'Đang xử lý',
-        resolved: 'Đã giải quyết hoàn tất',
-      };
-
-      setToast({
-        message: `Báo cáo #${selectedReport.id.substring(0, 6)} đã chuyển sang trạng thái: ${statusLabels[actionStatus]}!`,
-        type: 'success',
-      });
-
-      setShowModal(false);
-      setSelectedReport(null);
-      setActionStatus(null);
-      fetchReportsList();
-    } catch (err) {
-      setToast({ message: 'Lỗi khi cập nhật báo cáo: ' + err.message, type: 'error' });
-    }
-  };
-
-  const handleDeleteReport = async (report) => {
-    if (!report) return;
-
-    const confirmDelete = window.confirm(`Bạn có chắc muốn xóa báo cáo "${report.title || report.id}" không? Hành động này không thể hoàn tác.`);
-    if (!confirmDelete) return;
-
-    try {
-      await deleteReport(report.id);
-      setToast({ message: `Đã xóa báo cáo #${report.id.substring(0, 6)} thành công!`, type: 'success' });
-      fetchReportsList();
-    } catch (err) {
-      setToast({ message: 'Lỗi khi xóa báo cáo: ' + err.message, type: 'error' });
-    }
-  };
-
-  // Tính thời gian đã trôi qua kể từ khi nhận báo cáo
-  const calculateElapsedTime = (createdAtStr) => {
-    if (!createdAtStr) return 'N/A';
-    try {
-      const created = new Date(createdAtStr);
-      const now = new Date();
-      const diffMs = now - created;
-      if (diffMs < 0) return 'Vừa mới gửi';
-
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      const diffHours = Math.floor(diffMins / 60);
-      const diffDays = Math.floor(diffHours / 24);
-
-      if (diffDays > 0) return `${diffDays} ngày trước`;
-      if (diffHours > 0) return `${diffHours} giờ ${diffMins % 60} phút trước`;
-      return `${diffMins} phút trước`;
+      const response = await suggestAssignees(report.id);
+      setSuggestions(response.data?.data || response.data || []);
     } catch {
-      return createdAtStr;
+      setSuggestions([]);
     }
   };
 
-  // Format ngày tạo
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'N/A';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return dateStr;
-    }
+  const confirmAssign = async () => {
+    if (!selected || !assigneeId) return;
+    await assignReport(selected.id, assigneeId, note);
+    setSelected(null); setToast({ message: 'Phân công thành công', type: 'success' }); load();
   };
 
-  // Lọc bài báo cáo theo ô tìm kiếm
-  const filteredReports = reports.filter((r) => {
-    const titleMatch = (r.title || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const descMatch = (r.description || r.location || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const reporterMatch = (r.reporterId || r.reporterName || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return titleMatch || descMatch || reporterMatch;
-  });
+  const changeStatus = async (report, status) => {
+    const resolution = status === 'resolved' ? window.prompt('Nhập kết quả xử lý:') : '';
+    if (status === 'resolved' && resolution === null) return;
+    await updateReportStatus(report.id, status, resolution || '', note);
+    setToast({ message: 'Cập nhật trạng thái thành công', type: 'success' }); load();
+  };
 
-  const totalPages = Math.ceil(filteredReports.length / itemsPerPage) || 1;
-  const paginatedReports = filteredReports.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const remove = async (report) => {
+    if (!window.confirm('Chuyển báo cáo vào thùng rác trong 30 ngày?')) return;
+    await softDeleteReport(report.id); load();
+  };
+
+  const restore = async (report) => { await restoreReport(report.id); load(); };
+
+  const setFilter = (key, value) => setFilters((old) => ({ ...old, [key]: value }));
 
   return (
-    <div>
-      <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'info' })} />
+    <div style={{ padding: 24, background: '#f8fafc', minHeight: '100vh' }}>
+      {toast.message && <Toast {...toast} onClose={() => setToast({ message: '', type: 'info' })} />}
+      <h1>SafeSchool – Quản lý báo cáo</h1>
 
-      {/* Action Modal */}
-      <Modal
-        isOpen={showModal}
-        title={
-          actionStatus === 'processing'
-            ? '🔄 Bắt Đầu Xử Lý Báo Cáo'
-            : '✅ Hoàn Thành Xử Lý Báo Cáo'
-        }
-        message={
-          actionStatus === 'processing'
-            ? `Cập nhật trạng thái báo cáo #${selectedReport?.id.substring(0, 8)} sang "Đang Xử Lý". Nhập ghi chú xử lý ban đầu:`
-            : `Xác nhận báo cáo #${selectedReport?.id.substring(0, 8)} đã được GIẢI QUYẾT HOÀN TẤT. Nhập kết quả xử lý:`
-        }
-        variant={actionStatus === 'processing' ? 'primary' : 'success'}
-        inputPlaceholder="Nhập ghi chú xử lý (ví dụ: Đã làm việc với ban giám hiệu và giáo viên chủ nhiệm)..."
-        requireInput={false}
-        confirmText={actionStatus === 'processing' ? 'Lưu Trạng Thái Xử Lý' : 'Hoàn Thành Báo Cáo'}
-        cancelText="Hủy Bỏ"
-        onConfirm={handleConfirmReportAction}
-        onCancel={() => {
-          setShowModal(false);
-          setSelectedReport(null);
-          setActionStatus(null);
-        }}
-      />
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+        <article style={card}><b>Báo cáo của tôi</b><div style={metric}>{myReports.length}</div></article>
+        <article style={card}><b>Quá hạn SLA</b><div style={metric}>{overdueCount}</div></article>
+        <article style={card}><b>Thùng rác</b><div style={metric}>{filters.include_deleted ? reports.length : '—'}</div></article>
+      </section>
 
-      {/* Header Title */}
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ margin: 0, fontSize: '1.8rem', color: '#0f172a', fontWeight: '700' }}>
-          📋 Tiếp Nhận & Xử Lý Báo Cáo Bạo Lực
-        </h1>
-        <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.95rem' }}>
-          Hệ thống tiếp nhận báo cáo từ học sinh. Báo cáo <strong>SOS</strong> được tự động ưu tiên xếp lên đầu
-        </p>
-      </div>
+      <form onSubmit={submitSearch} style={{ ...card, display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        <input value={filters.q} onChange={(e) => setFilter('q', e.target.value)} placeholder="Tìm tiêu đề, nội dung, mã, địa điểm..." style={input} />
+        <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)} style={input}>
+          <option value="all">Mọi trạng thái</option><option value="pending">Chờ xử lý</option>
+          <option value="processing">Đang xử lý</option><option value="resolved">Hoàn thành</option>
+        </select>
+        <select value={filters.assignee} onChange={(e) => setFilter('assignee', e.target.value)} style={input}>
+          <option value="">Mọi người xử lý</option>
+          {handlers.map((h) => <option key={h.uid} value={h.uid}>{h.displayName} ({h.workload || 0})</option>)}
+        </select>
+        <select value={filters.priority} onChange={(e) => setFilter('priority', e.target.value)} style={input}>
+          <option value="all">Mọi ưu tiên</option><option value="sos">SOS</option>
+          <option value="high">Cao</option><option value="normal">Thường</option><option value="low">Thấp</option>
+        </select>
+        <input type="date" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} style={input} />
+        <input type="date" value={filters.to} onChange={(e) => setFilter('to', e.target.value)} style={input} />
+        <button type="submit">Tìm kiếm</button>
+        <button type="button" onClick={() => setFilter('assignee', currentUser?.uid || '')}>Báo cáo của tôi</button>
+        <button type="button" onClick={() => setFilters({ ...initialFilters, include_deleted: !filters.include_deleted })}>
+          {filters.include_deleted ? 'Quay lại danh sách' : 'Thùng rác'}
+        </button>
+      </form>
 
-      {/* Control Bar */}
-      <div
-        style={{
-          backgroundColor: '#ffffff',
-          borderRadius: '12px',
-          padding: '16px 20px',
-          marginBottom: '24px',
-          border: '1px solid #e2e8f0',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '16px',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-        }}
-      >
-        {/* Search */}
-        <div style={{ position: 'relative', flex: '1', minWidth: '260px' }}>
-          <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>
-            🔍
-          </span>
-          <input
-            type="text"
-            placeholder="Tìm theo tiêu đề, địa điểm hoặc người báo cáo..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
-            style={{
-              width: '100%',
-              padding: '10px 14px 10px 38px',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              fontSize: '0.9rem',
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
-
-        {/* Filter Dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>Lọc Trạng Thái:</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '0.9rem',
-                backgroundColor: '#ffffff',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              <option value="all">Tất cả báo cáo</option>
-              <option value="pending">Chờ tiếp nhận (Pending)</option>
-              <option value="processing">Đang xử lý (Processing)</option>
-              <option value="resolved">Đã giải quyết (Resolved)</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>Lọc Mức Ưu Tiên:</label>
-            <select
-              value={priorityFilter}
-              onChange={(e) => {
-                setPriorityFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '0.9rem',
-                backgroundColor: '#ffffff',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              <option value="all">Tất cả mức ưu tiên</option>
-              <option value="sos">SOS</option>
-              <option value="high">High</option>
-              <option value="normal">Normal</option>
-              <option value="low">Low</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Loading state */}
-      {loading && (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
-          <span style={{ fontSize: '2rem' }}>⏳</span>
-          <p style={{ color: '#64748b', marginTop: '8px' }}>Đang tải danh sách báo cáo vi phạm...</p>
-        </div>
-      )}
-
-      {/* Error state */}
-      {error && !loading && (
-        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', padding: '20px', borderRadius: '10px', textAlign: 'center' }}>
-          <p style={{ color: '#dc2626', margin: '0 0 12px' }}>⚠️ {error}</p>
-          <button onClick={fetchReportsList} style={{ padding: '8px 16px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-            🔄 Thử lại
-          </button>
-        </div>
-      )}
-
-      {/* Reports Table */}
-      {!loading && !error && (
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: '600' }}>
-                <th style={{ padding: '14px 20px' }}>Loại & Tiêu Đề Báo Cáo</th>
-                <th style={{ padding: '14px 20px' }}>Người Gửi / Địa Điểm</th>
-                <th style={{ padding: '14px 20px' }}>Thời Gian Nhận</th>
-                <th style={{ padding: '14px 20px' }}>Trạng Thái</th>
-                <th style={{ padding: '14px 20px', textAlign: 'right' }}>Hành Động Xử Lý</th>
+      <div style={{ ...card, overflowX: 'auto' }}>
+        {loading ? <p>Đang tải...</p> : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><th>Mã / Nội dung</th><th>Ưu tiên</th><th>Người xử lý</th><th>SLA</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+            <tbody>{reports.map((r) => (
+              <tr key={r.id} style={{ borderTop: '1px solid #e2e8f0' }}>
+                <td style={cell}><b>#{r.trackingCode || r.id.slice(0, 8)}</b><br />{r.title}<br /><small>{r.description}</small></td>
+                <td style={cell}>{String(r.priority || 'NORMAL').toUpperCase()}</td>
+                <td style={cell}>{r.assignedToName || 'Chưa phân công'}</td>
+                <td style={cell}>{r.sla?.isEscalated ? '⚠ Quá hạn' : r.sla?.resolutionDeadline || '—'}</td>
+                <td style={cell}>{r.status}</td>
+                <td style={cell}>
+                  {filters.include_deleted ? <button onClick={() => restore(r)}>Khôi phục</button> : <>
+                    <button onClick={() => openAssign(r)}>Phân công</button>{' '}
+                    <button onClick={() => changeStatus(r, 'processing')}>Đang xử lý</button>{' '}
+                    <button onClick={() => changeStatus(r, 'resolved')}>Hoàn thành</button>{' '}
+                    <button onClick={() => remove(r)}>Xóa</button>
+                  </>}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {paginatedReports.length === 0 ? (
-                <tr>
-                  <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8' }}>
-                    Không có báo cáo nào phù hợp.
-                  </td>
-                </tr>
-              ) : (
-                paginatedReports.map((r) => {
-                  const reportType = (r.type || '').toLowerCase();
-                  const isSOS = reportType === 'sos_emergency' || (r.priority || '').toUpperCase() === 'SOS';
-                  const isPending = (r.status || 'pending') === 'pending';
-                  const isProcessing = r.status === 'processing';
-                  const isResolved = r.status === 'resolved';
-
-                  return (
-                    <tr
-                      key={r.id}
-                      style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        backgroundColor: isSOS ? '#fef2f2' : 'transparent',
-                        transition: 'background-color 0.15s',
-                      }}
-                    >
-                      {/* Priority Tag & Title */}
-                      <td style={{ padding: '14px 20px', maxWidth: '300px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          {isSOS ? (
-                            <span
-                              style={{
-                                backgroundColor: '#dc2626',
-                                color: '#ffffff',
-                                fontWeight: '800',
-                                padding: '2px 8px',
-                                borderRadius: '4px',
-                                fontSize: '0.75rem',
-                                letterSpacing: '0.5px',
-                                animation: 'pulseBadge 1.5s infinite',
-                              }}
-                            >
-                              🚨 SOS KHẨN CẤP
-                            </span>
-                          ) : (
-                            <span style={{ backgroundColor: '#e2e8f0', color: '#475569', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>
-                              Thông thường
-                            </span>
-                          )}
-                        </div>
-
-                        <div style={{ fontWeight: '600', color: '#0f172a', fontSize: '0.95rem' }}>
-                          {r.title || 'Báo cáo sự cố bạo lực'}
-                        </div>
-                        {r.description && (
-                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {r.description}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Reporter / Location */}
-                      <td style={{ padding: '14px 20px', color: '#334155' }}>
-                        <div style={{ fontWeight: '500' }}>{r.reporterName || r.reporterId || 'Học sinh ẩn danh'}</div>
-                        {r.location && <div style={{ fontSize: '0.8rem', color: '#64748b' }}>📍 {r.location}</div>}
-                      </td>
-
-                      {/* Created Time & Processing duration */}
-                      <td style={{ padding: '14px 20px', color: '#64748b', fontSize: '0.85rem' }}>
-                        <div>{formatDate(r.createdAt)}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#2563eb', fontWeight: '600', marginTop: '2px' }}>
-                          ⏱️ {calculateElapsedTime(r.createdAt)}
-                        </div>
-                      </td>
-
-                      {/* Status Tag */}
-                      <td style={{ padding: '14px 20px' }}>
-                        {isPending && (
-                          <span style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '4px 12px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>
-                            🔴 Chờ xử lý
-                          </span>
-                        )}
-                        {isProcessing && (
-                          <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '4px 12px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>
-                            🟡 Đang xử lý
-                          </span>
-                        )}
-                        {isResolved && (
-                          <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '4px 12px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>
-                            🟢 Đã hoàn thành
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => handleOpenReportModal(r, 'processing')}
-                            disabled={isResolved}
-                            style={{
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              border: 'none',
-                              backgroundColor: isResolved ? '#e2e8f0' : '#2563eb',
-                              color: isResolved ? '#94a3b8' : '#ffffff',
-                              fontWeight: '600',
-                              fontSize: '0.825rem',
-                              cursor: isResolved ? 'default' : 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <span>🔄</span> Xử lý
-                          </button>
-
-                          <button
-                            onClick={() => handleOpenReportModal(r, 'resolved')}
-                            disabled={isResolved}
-                            style={{
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              border: 'none',
-                              backgroundColor: isResolved ? '#e2e8f0' : '#16a34a',
-                              color: isResolved ? '#94a3b8' : '#ffffff',
-                              fontWeight: '600',
-                              fontSize: '0.825rem',
-                              cursor: isResolved ? 'default' : 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <span>✅</span> Hoàn thành
-                          </button>
-
-                          <button
-                            onClick={() => handleDeleteReport(r)}
-                            style={{
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              border: 'none',
-                              backgroundColor: '#dc2626',
-                              color: '#ffffff',
-                              fontWeight: '600',
-                              fontSize: '0.825rem',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <span>🗑️</span> Xóa
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
+            ))}</tbody>
           </table>
+        )}
+      </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                Trang {currentPage} / {totalPages} (Tổng {filteredReports.length} báo cáo)
-              </span>
-
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: currentPage === 1 ? '#f1f5f9' : '#ffffff',
-                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  ◀ Trước
-                </button>
-                <button
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: currentPage === totalPages ? '#f1f5f9' : '#ffffff',
-                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  Sau ▶
-                </button>
-              </div>
-            </div>
-          )}
+      {selected && <div style={overlay}>
+        <div style={{ ...card, width: 520 }}>
+          <h3>Phân công: {selected.title}</h3>
+          <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} style={{ ...input, width: '100%' }}>
+            <option value="">Chọn người xử lý</option>
+            {suggestions.map((h) => <option key={h.uid} value={h.uid}>
+              {h.displayName} – {h.matchScore} điểm – workload {h.workload}
+            </option>)}
+          </select>
+          {suggestions.find((h) => h.uid === assigneeId)?.matchReason &&
+            <p>{suggestions.find((h) => h.uid === assigneeId).matchReason}</p>}
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ghi chú phân công" style={{ ...input, width: '100%', minHeight: 90 }} />
+          <div style={{ textAlign: 'right' }}><button onClick={() => setSelected(null)}>Hủy</button>{' '}<button onClick={confirmAssign}>Xác nhận</button></div>
         </div>
-      )}
-
-      <style>{`
-        @keyframes pulseBadge {
-          0% { opacity: 1; }
-          50% { opacity: 0.6; }
-          100% { opacity: 1; }
-        }
-      `}</style>
+      </div>}
     </div>
   );
 };
 
+const card = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16 };
+const metric = { fontSize: 28, fontWeight: 800, marginTop: 8 };
+const input = { padding: '9px 10px', border: '1px solid #cbd5e1', borderRadius: 8 };
+const cell = { padding: 12, verticalAlign: 'top' };
+const overlay = { position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', display: 'grid', placeItems: 'center', zIndex: 50 };
 export default ManageReports;

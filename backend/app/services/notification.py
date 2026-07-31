@@ -130,3 +130,55 @@ class NotificationService:
         except Exception as e:
             logger.error(f"❌ Lỗi khi xử lý cảnh báo SOS: {e}")
             return False
+
+    @staticmethod
+    async def send_report_status_notification(user_id: Optional[str], report_id: str, tracking_code: str, status_val: str, resolution: Optional[str] = "") -> bool:
+        """
+        Tự động phản hồi cho người dùng khi trạng thái báo cáo thay đổi.
+        - Gửi In-app notification nếu user_id có sẵn.
+        """
+        if not user_id or user_id == "anonymous":
+            return False
+
+        status_labels = {
+            "processing": "đang được tiếp nhận & xử lý 🔄",
+            "resolved": "đã được giải quyết hoàn tất 🎉",
+            "rejected": "đã bị từ chối ⚠️"
+        }
+        status_text = status_labels.get(status_val, f"được cập nhật sang trạng thái: {status_val}")
+
+        title = f"Cập nhật tiến độ báo cáo #{tracking_code or report_id[:6]}"
+        message = f"Báo cáo sự việc của bạn {status_text}."
+        if resolution:
+            message += f" Kết quả: {resolution}"
+
+        return await NotificationService.create_notification(
+            user_id=user_id,
+            title=title,
+            message=message,
+            notification_type="report_update"
+        )
+
+    @staticmethod
+    async def send_sla_escalation_alert(report_id: str, report_data: Dict[str, Any]) -> bool:
+        """
+        Gửi thông báo leo thang SLA cho Admin và Ban Giám Hiệu khi báo cáo bị trễ hạn xử lý.
+        """
+        try:
+            db = get_firestore_db()
+            logger.warning(f"🚨 LEO THANG SLA: Báo cáo #{report_id} - {report_data.get('escalationReason')}")
+
+            if db:
+                admins = db.collection("users").where("role", "==", "admin").stream()
+                for admin_doc in admins:
+                    await NotificationService.create_notification(
+                        user_id=admin_doc.id,
+                        title="⚠️ LEO THANG CẤP BÁCH (SLA OVERDUE)",
+                        message=f"Báo cáo #{report_data.get('trackingCode') or report_id[:6]}: {report_data.get('escalationReason', 'Vượt quá thời gian cam kết SLA')}",
+                        notification_type="sla_escalation"
+                    )
+            return True
+        except Exception as e:
+            logger.error(f"❌ Lỗi khi gửi thông báo leo thang SLA: {e}")
+            return False
+

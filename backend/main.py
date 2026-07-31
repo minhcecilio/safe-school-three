@@ -5,9 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 
+import asyncio
 from app.config.firebase import init_firebase
 from app.dependencies.auth import AuthMiddleware
 from app.routers.admin import router as admin_router
+from app.routers.report import router as report_router
+from app.services.sla_worker import SLAEscalationEngine
 
 # ==================== CẤU HÌNH LOGGING ====================
 logging.basicConfig(
@@ -20,7 +23,7 @@ logger = logging.getLogger("safeschool.main")
 # ==================== KHỞI TẠO FASTAPI APP ====================
 app = FastAPI(
     title="SafeSchool API Backend",
-    description="Hệ thống Backend kết nối Firebase Admin SDK & Firestore cho giải pháp Phòng chống bạo lực học đường",
+    description="Hệ thống Backend kết nối Firebase Admin SDK & Firestore cho giải pháp Phòng chống bạo lực học đường (Antigravity Architecture)",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -84,14 +87,28 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
+async def start_periodic_sla_checker():
+    """Background task định kỳ quét SLA 5 phút 1 lần"""
+    logger.info("⏱️ Kích hoạt SLA Background Worker (Quét định kỳ mỗi 300s)...")
+    while True:
+        try:
+            await asyncio.sleep(300)
+            await SLAEscalationEngine.check_and_escalate_reports()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"❌ Lỗi trong SLA background loop: {e}")
+
 # ==================== KHỞI ĐỘNG FIREBASE KHI APP CHẠY ====================
 @app.on_event("startup")
 async def startup_event():
     logger.info("🚀 Đang khởi động SafeSchool FastAPI Server...")
     init_firebase()
+    asyncio.create_task(start_periodic_sla_checker())
 
 # ==================== NỐI ROUTERS ====================
 app.include_router(admin_router)
+app.include_router(report_router)
 
 # ==================== ROOT ENDPOINT ====================
 @app.get("/", tags=["System"])

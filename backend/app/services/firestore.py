@@ -1,11 +1,12 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from google.cloud import firestore
 from fastapi import HTTPException, status
 from firebase_admin import auth
 from app.config.firebase import get_firestore_db
 from app.services.notification import NotificationService
+from app.services.classifier import ReportAutoClassifier
 
 logger = logging.getLogger("safeschool.firestore")
 
@@ -178,23 +179,54 @@ class FirestoreService:
 
     @staticmethod
     async def create_report(report_data: Dict[str, Any], reporter_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Tạo báo cáo mới vào Firestore và gửi thông báo nếu cần."""
+        """
+        Antigravity Report Creator:
+        - Tự động phân loại priority, autoTags, trustScore.
+        - Gán SLA Deadline (Response: 2h, Resolution: 12-24h).
+        - Sinh mã tra cứu công khai trackingCode (VD: SR-2026-889102).
+        """
         db = get_firestore_db()
         if not db:
             raise HTTPException(status_code=500, detail="Không có kết nối tới cơ sở dữ liệu")
 
+        # Tự động phân loại & tính SLA bằng ReportAutoClassifier
+        classification = await ReportAutoClassifier.classify(report_data, reporter_info)
+
         report_payload = {
             "title": report_data.get("title", "Báo cáo không có tiêu đề"),
             "description": report_data.get("description", ""),
-            "priority": str(report_data.get("priority", "normal")).lower(),
+            "priority": classification.get("priority", "NORMAL"),
             "type": report_data.get("type", "report"),
             "location": report_data.get("location", ""),
             "targetId": report_data.get("targetId", None),
             "status": "pending",
             "resolution": "",
+            "trackingCode": classification.get("trackingCode"),
+            "autoTags": classification.get("autoTags", []),
+            "trustScore": classification.get("trustScore", 80),
+            "sla": classification.get("sla"),
             "createdAt": datetime.now().isoformat(),
             "updatedAt": datetime.now().isoformat(),
             "sosAlertSent": False,
+            "assignedTo": None,
+            "assignedAt": None,
+            "assignedBy": None,
+            "assignedToName": None,
+            "assignedToRole": None,
+            "history": [{
+                "action": "created", "from": None, "to": "pending",
+                "actorUid": reporter_info.get("uid") if reporter_info else None,
+                "note": "Báo cáo được tạo", "timestamp": datetime.now().isoformat()
+            }],
+            "progressNotes": [],
+            "isDeleted": False,
+            "deletedAt": None,
+            "deletedBy": None,
+            "purgeAt": None,
+            "searchText": " ".join([
+                str(report_data.get("title", "")), str(report_data.get("description", "")),
+                str(report_data.get("location", "")), str(report_data.get("type", ""))
+            ]).lower(),
         }
 
         if reporter_info:
@@ -211,12 +243,23 @@ class FirestoreService:
 
         created_report = {"id": report_id, **report_payload}
 
-        # Nếu là báo cáo SOS, gửi alert admin
-        report_type = str(report_payload.get("type", "")).lower()
-        report_priority = str(report_payload.get("priority", "")).upper()
-        is_sos_report = report_type == "sos_emergency" or report_priority == "SOS"
-        if is_sos_report:
+        # Đẩy thông báo phản hồi cho người gửi (kèm mã tra cứu)
+        if reporter_info and reporter_info.get("uid"):
+            await NotificationService.create_notification(
+                user_id=reporter_info.get("uid"),
+                title="✅ Báo cáo đã được tiếp nhận thành công",
+                message=f"Báo cáo của bạn đã được tiếp nhận với Mã tra cứu: #{classification.get('trackingCode')}. Trạng thái: Đang chờ xử lý.",
+                notification_type="report_created"
+            )
+
+        # Nếu là báo cáo SOS / HIGH priority -> Cảnh báo ngay lập tức
+        if report_payload.get("priority") == "SOS" or report_payload.get("type") == "sos_emergency":
             await FirestoreService._send_pending_sos_alert(report_id, created_report)
+
+        # Rule engine: tự động phân công theo loại báo cáo/từ khóa.
+        auto_assignment = await FirestoreService.apply_assignment_rules(report_id, created_report)
+        if auto_assignment:
+            created_report.update(auto_assignment)
 
         return created_report
 
@@ -478,79 +521,210 @@ class FirestoreService:
             raise HTTPException(status_code=500, detail=f"Lỗi lấy báo cáo: {str(e)}")
 
     @staticmethod
-    async def update_report_status(report_id: str, status_val: str, resolution: Optional[str], admin_uid: str) -> Dict[str, Any]:
-        """Cập nhật trạng thái báo cáo (pending -> processing -> resolved)"""
+    async def get_available_handlers() -> List[Dict[str, Any]]:
+        """Danh sách người có thể xử lý, kèm workload và chuyên môn."""
+        db = get_firestore_db()
+        if not db:
+            return []
+        handlers = []
+        for doc in db.collection("users").stream():
+            data = doc.to_dict() or {}
+            role = str(data.get("role", "")).lower()
+            if role in {"admin", "psychologist", "counselor", "teacher"} and data.get("is_active", True):
+                handlers.append({
+                    "uid": doc.id,
+                    "displayName": data.get("displayName") or data.get("name") or data.get("email") or "Chưa đặt tên",
+                    "email": data.get("email", ""), "role": role,
+                    "workload": int(data.get("workload", 0) or 0),
+                    "expertise": data.get("expertise", []),
+                    "handledTypeStats": data.get("handledTypeStats", {})
+                })
+        return sorted(handlers, key=lambda x: (x["workload"], x["displayName"]))
+
+    @staticmethod
+    def _history_entry(action: str, actor_uid: str, old_value: Any = None,
+                       new_value: Any = None, note: str = "") -> Dict[str, Any]:
+        return {"action": action, "from": old_value, "to": new_value,
+                "actorUid": actor_uid, "note": note or "", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+    @staticmethod
+    async def assign_report(report_id: str, assignee_id: str, admin_uid: str, note: str = "") -> Dict[str, Any]:
+        db = get_firestore_db()
+        report_ref = db.collection("reports").document(report_id)
+        report_doc = report_ref.get()
+        user_ref = db.collection("users").document(assignee_id)
+        user_doc = user_ref.get()
+        if not report_doc.exists: raise HTTPException(404, "Báo cáo không tồn tại")
+        if not user_doc.exists: raise HTTPException(404, "Người xử lý không tồn tại")
+        report = report_doc.to_dict() or {}; user = user_doc.to_dict() or {}
+        role = str(user.get("role", "")).lower()
+        if role not in {"admin", "psychologist", "counselor", "teacher"}:
+            raise HTTPException(400, "Tài khoản không có quyền xử lý báo cáo")
+        old_assignee = report.get("assignedTo"); now = datetime.now(timezone.utc).isoformat()
+        history = list(report.get("history", []))
+        history.append(FirestoreService._history_entry("assignment", admin_uid, old_assignee, assignee_id, note))
+        batch = db.batch()
+        batch.update(report_ref, {"assignedTo": assignee_id,
+            "assignedToName": user.get("displayName") or user.get("name") or user.get("email"),
+            "assignedToRole": role, "assignedAt": now, "assignedBy": admin_uid,
+            "status": "processing" if report.get("status") == "pending" else report.get("status", "processing"),
+            "updatedAt": now, "updatedBy": admin_uid, "history": history})
+        if old_assignee and old_assignee != assignee_id:
+            batch.update(db.collection("users").document(old_assignee), {"workload": firestore.Increment(-1)})
+        if old_assignee != assignee_id:
+            batch.update(user_ref, {"workload": firestore.Increment(1)})
+        batch.commit()
+        await NotificationService.create_notification(assignee_id, "📋 Báo cáo mới được giao",
+            f"Bạn được phân công xử lý báo cáo #{report.get('trackingCode', report_id[:6])}.", "report_assigned")
+        await FirestoreService.log_admin_action(admin_uid, "ASSIGN_REPORT", "report", report_id,
+            {"from": old_assignee, "to": assignee_id, "note": note})
+        return {"id": report_id, "assignedTo": assignee_id, "assignedAt": now, "workload": int(user.get("workload", 0))+1}
+
+    @staticmethod
+    async def update_report_status(report_id: str, status_val: str, resolution: Optional[str], admin_uid: str,
+                                   assigned_to: Optional[str] = None, assigned_to_name: Optional[str] = None,
+                                   assigned_to_role: Optional[str] = None, progress_note: Optional[str] = None) -> Dict[str, Any]:
+        if assigned_to:
+            await FirestoreService.assign_report(report_id, assigned_to, admin_uid, progress_note or "")
+        db = get_firestore_db(); ref = db.collection("reports").document(report_id); snap = ref.get()
+        if not snap.exists: raise HTTPException(404, "Báo cáo không tồn tại")
+        data = snap.to_dict() or {}; old_status = data.get("status", "pending")
+        if status_val not in {"pending", "processing", "resolved", "rejected"}: raise HTTPException(400, "Trạng thái không hợp lệ")
+        now = datetime.now(timezone.utc).isoformat(); history = list(data.get("history", []))
+        history.append(FirestoreService._history_entry("status", admin_uid, old_status, status_val, progress_note or resolution or ""))
+        updates = {"status": status_val, "updatedAt": now, "updatedBy": admin_uid, "history": history}
+        if resolution is not None: updates["resolution"] = resolution
+        if progress_note:
+            notes = list(data.get("progressNotes", [])); notes.append({"note": progress_note, "updatedBy": admin_uid, "timestamp": now, "status": status_val}); updates["progressNotes"] = notes
+        if status_val == "resolved": updates["resolvedAt"] = now
+        ref.update(updates)
+        if old_status != "resolved" and status_val in {"resolved", "rejected"} and data.get("assignedTo"):
+            db.collection("users").document(data["assignedTo"]).update({"workload": firestore.Increment(-1)})
+        await NotificationService.send_report_status_notification(data.get("reporterId"), report_id, data.get("trackingCode", report_id[:6]), status_val, resolution or progress_note or "")
+        await FirestoreService.log_admin_action(admin_uid, "UPDATE_REPORT_STATUS", "report", report_id, updates)
+        return {"id": report_id, "status": status_val, "updatedAt": now}
+
+    @staticmethod
+    async def soft_delete_report(report_id: str, admin_uid: str) -> Dict[str, Any]:
+        db = get_firestore_db(); ref = db.collection("reports").document(report_id); snap = ref.get()
+        if not snap.exists: raise HTTPException(404, "Báo cáo không tồn tại")
+        data=snap.to_dict() or {}; now=datetime.now(timezone.utc); history=list(data.get("history", []))
+        history.append(FirestoreService._history_entry("soft_delete", admin_uid, False, True, "Chuyển vào thùng rác"))
+        ref.update({"isDeleted": True, "deletedAt": now.isoformat(), "deletedBy": admin_uid,
+                    "purgeAt": (now+timedelta(days=30)).isoformat(), "updatedAt": now.isoformat(), "history": history})
+        if data.get("assignedTo") and data.get("status") not in {"resolved", "rejected"}:
+            db.collection("users").document(data["assignedTo"]).update({"workload": firestore.Increment(-1)})
+        return {"id": report_id, "isDeleted": True, "restoreUntil": (now+timedelta(days=30)).isoformat()}
+
+    @staticmethod
+    async def restore_report(report_id: str, admin_uid: str) -> Dict[str, Any]:
+        db=get_firestore_db(); ref=db.collection("reports").document(report_id); snap=ref.get()
+        if not snap.exists: raise HTTPException(404, "Báo cáo không tồn tại")
+        data=snap.to_dict() or {}
+        if not data.get("isDeleted"): raise HTTPException(400, "Báo cáo chưa bị xóa")
+        history=list(data.get("history", [])); history.append(FirestoreService._history_entry("restore", admin_uid, True, False, "Khôi phục từ thùng rác"))
+        now=datetime.now(timezone.utc).isoformat(); ref.update({"isDeleted": False, "deletedAt": None, "deletedBy": None, "purgeAt": None, "updatedAt": now, "history": history})
+        if data.get("assignedTo") and data.get("status") not in {"resolved", "rejected"}:
+            db.collection("users").document(data["assignedTo"]).update({"workload": firestore.Increment(1)})
+        return {"id": report_id, "isDeleted": False, "restoredAt": now}
+
+    @staticmethod
+    async def search_reports(q: str = "", status_filter: str = "all", assignee: str = "", report_type: str = "",
+                             priority: str = "all", date_from: str = "", date_to: str = "", include_deleted: bool = False,
+                             sort_by: str = "createdAt", sort_order: str = "desc") -> List[Dict[str, Any]]:
+        db=get_firestore_db(); rows=[]; needle=(q or "").strip().lower()
+        for doc in db.collection("reports").stream():
+            d=doc.to_dict() or {}; d["id"]=doc.id
+            if bool(d.get("isDeleted", False)) != bool(include_deleted): continue
+            if status_filter != "all" and d.get("status") != status_filter: continue
+            if assignee and d.get("assignedTo") != assignee: continue
+            if report_type and d.get("type") != report_type: continue
+            if priority != "all" and str(d.get("priority", "")).lower() != priority.lower(): continue
+            created=str(d.get("createdAt", ""))
+            if date_from and created < date_from: continue
+            if date_to and created > date_to + "T23:59:59": continue
+            haystack=d.get("searchText") or " ".join(str(d.get(k,"")) for k in ("title","description","location","trackingCode","autoTags")).lower()
+            if needle and needle not in haystack: continue
+            rows.append(d)
+        rows.sort(key=lambda x: str(x.get(sort_by, "")), reverse=sort_order != "asc")
+        return rows
+
+    @staticmethod
+    async def apply_assignment_rules(report_id: str, report: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Áp dụng rule đang hoạt động; rule priority nhỏ hơn được xét trước."""
+        db = get_firestore_db()
+        text = (str(report.get("title", "")) + " " + str(report.get("description", ""))).lower()
+        report_type = str(report.get("type", "")).lower()
+        rules = []
+        for doc in db.collection("assignment_rules").stream():
+            rule = doc.to_dict() or {}; rule["id"] = doc.id
+            if rule.get("isActive", True): rules.append(rule)
+        rules.sort(key=lambda r: int(r.get("priority", 100)))
+        for rule in rules:
+            type_match = not rule.get("reportType") or str(rule.get("reportType")).lower() == report_type
+            keywords = [str(k).lower().strip() for k in rule.get("keywords", []) if str(k).strip()]
+            keyword_match = not keywords or any(k in text for k in keywords)
+            if type_match and keyword_match and rule.get("assigneeId"):
+                result = await FirestoreService.assign_report(report_id, rule["assigneeId"], "system:auto-rule",
+                    f"Tự động phân công theo rule: {rule.get('name', rule['id'])}")
+                result["assignmentRuleId"] = rule["id"]
+                return result
+        return None
+
+    @staticmethod
+    async def suggest_assignees(report_id: str) -> List[Dict[str, Any]]:
+        db=get_firestore_db(); snap=db.collection("reports").document(report_id).get()
+        if not snap.exists: raise HTTPException(404, "Báo cáo không tồn tại")
+        report=snap.to_dict() or {}; text=(str(report.get("title",""))+" "+str(report.get("description",""))).lower(); typ=str(report.get("type","")).lower()
+        psychological=any(k in text for k in ["tâm lý","trầm cảm","lo âu","cô lập","bắt nạt","khủng hoảng"])
+        physical=any(k in text for k in ["đánh","bạo lực","vũ khí","xô xát","tấn công"])
+        result=[]
+        for h in await FirestoreService.get_available_handlers():
+            score=50; reasons=[]; role=h["role"]
+            if psychological and role in {"psychologist","counselor"}: score+=30; reasons.append("phù hợp chuyên môn tâm lý")
+            if physical and role in {"admin","teacher"}: score+=25; reasons.append("phù hợp xử lý bạo lực thể chất")
+            if typ in (h.get("handledTypeStats") or {}): score+=min(15, int(h["handledTypeStats"].get(typ,0))); reasons.append("đã xử lý trường hợp tương tự")
+            score-=min(35, h["workload"]*5); reasons.append(f"đang xử lý {h['workload']} báo cáo")
+            result.append({**h, "matchScore": max(0,min(100,score)), "matchReason": ", ".join(reasons)})
+        return sorted(result, key=lambda x: (-x["matchScore"], x["workload"]))
+
+    @staticmethod
+    async def get_report_by_tracking_code(tracking_code: str) -> Dict[str, Any]:
+        """Cho phép người dùng tra cứu tiến độ xử lý báo cáo thông qua trackingCode công khai."""
         db = get_firestore_db()
         if not db:
             raise HTTPException(status_code=500, detail="Cơ sở dữ liệu chưa sẵn sàng")
 
-        report_ref = db.collection("reports").document(report_id)
-        report_doc = report_ref.get()
+        reports_ref = db.collection("reports").where("trackingCode", "==", tracking_code.strip()).limit(1).stream()
+        reports = list(reports_ref)
 
-        if not report_doc.exists:
-            raise HTTPException(status_code=404, detail="Báo cáo không tồn tại")
+        if not reports:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy báo cáo với mã tra cứu: {tracking_code}")
 
-        report_data = report_doc.to_dict() or {}
-        update_data = {
-            "status": status_val,
-            "resolution": resolution or "",
-            "updatedAt": datetime.now().isoformat(),
-            "updatedBy": admin_uid
+        doc = reports[0]
+        data = doc.to_dict() or {}
+        sla = data.get("sla", {}) or {}
+        now_str = datetime.now().isoformat()
+        
+        sla_status = "In SLA"
+        if sla.get("isResponseOverdue") or sla.get("isResolutionOverdue"):
+            sla_status = "Escalated SLA"
+
+        return {
+            "trackingCode": data.get("trackingCode", tracking_code),
+            "title": data.get("title", ""),
+            "status": data.get("status", "pending"),
+            "priority": data.get("priority", "NORMAL"),
+            "resolution": data.get("resolution", ""),
+            "createdAt": data.get("createdAt", ""),
+            "updatedAt": data.get("updatedAt", ""),
+            "slaStatus": sla_status
         }
-
-        report_ref.update(update_data)
-
-        report_type = str(report_data.get("type", "")).lower()
-        report_priority = str(report_data.get("priority", "")).upper()
-        is_sos_report = report_type == "sos_emergency" or report_priority == "SOS"
-        if is_sos_report and report_data.get("sosAlertSent") is not True:
-            await FirestoreService._send_pending_sos_alert(report_id, report_data)
-
-        # Log admin
-        await FirestoreService.log_admin_action(
-            admin_uid=admin_uid,
-            action="UPDATE_REPORT_STATUS",
-            target_type="report",
-            target_id=report_id,
-            details=update_data
-        )
-
-        return {"id": report_id, "status": status_val}
 
     @staticmethod
     async def delete_report(report_id: str, admin_uid: str) -> Dict[str, Any]:
-        """Xóa một báo cáo khỏi Firestore và ghi lại hành động Admin."""
-        db = get_firestore_db()
-        if not db:
-            raise HTTPException(status_code=500, detail="Không có kết nối tới cơ sở dữ liệu")
-
-        report_ref = db.collection("reports").document(report_id)
-        report_doc = report_ref.get()
-
-        if not report_doc.exists:
-            raise HTTPException(status_code=404, detail="Báo cáo không tồn tại")
-
-        report_data = report_doc.to_dict() or {}
-        report_title = report_data.get("title", "Báo cáo không có tiêu đề")
-
-        report_ref.delete()
-
-        await FirestoreService.log_admin_action(
-            admin_uid=admin_uid,
-            action="DELETE_REPORT",
-            target_type="report",
-            target_id=report_id,
-            details={
-                "report_title": report_title,
-                "deleted_at": datetime.now().isoformat()
-            }
-        )
-
-        return {
-            "report_id": report_id,
-            "title": report_title,
-            "deleted": True
-        }
+        """Tương thích API cũ: chuyển sang xóa mềm."""
+        return await FirestoreService.soft_delete_report(report_id, admin_uid)
 
     # ==================== DASHBOARD & REAL-TIME STATS ====================
 
