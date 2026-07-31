@@ -14,9 +14,10 @@ export default function Avatar({ src, alt, className = '', style = {}, onClick }
       fill="none"
       className={`default-avatar-svg ${className}`}
       style={{
-        display: 'block',
-        width: '100%',
-        height: '100%',
+        display: 'inline-block',
+        flexShrink: 0,
+        alignSelf: 'flex-start',
+        aspectRatio: '1 / 1',
         borderRadius: '50%',
         backgroundColor: '#e2e8f0',
         color: '#64748b',
@@ -42,6 +43,10 @@ export default function Avatar({ src, alt, className = '', style = {}, onClick }
       alt={alt || 'Avatar'}
       className={className}
       style={{
+        display: 'inline-block',
+        flexShrink: 0,
+        alignSelf: 'flex-start',
+        aspectRatio: '1 / 1',
         objectFit: 'cover',
         borderRadius: '50%',
         cursor: onClick ? 'pointer' : 'default',

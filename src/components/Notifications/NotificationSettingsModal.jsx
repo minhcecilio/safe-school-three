@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../firebase/config';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -25,6 +26,18 @@ export default function NotificationSettingsModal({ isOpen, onClose }) {
       });
     }
   }, [user?.notificationSettings, isOpen]);
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -57,10 +70,13 @@ export default function NotificationSettingsModal({ isOpen, onClose }) {
     }
   };
 
-  return (
-    <div className="notif-modal-overlay fade-in" onClick={onClose}>
-      <div className="notif-modal-card scale-up" onClick={(e) => e.stopPropagation()}>
-        {/* Modal Header */}
+  // Render via React Portal directly into document.body to escape
+  // any parent stacking context (backdrop-filter, transform, filter on Header)
+  return ReactDOM.createPortal(
+    <div className="notif-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Cài đặt thông báo">
+      <div className="notif-modal-card" onClick={(e) => e.stopPropagation()}>
+
+        {/* Modal Header — always visible, flex-shrink: 0 */}
         <div className="notif-modal-header">
           <div className="notif-modal-title-box">
             <span className="notif-modal-header-icon">🔔</span>
@@ -74,7 +90,7 @@ export default function NotificationSettingsModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Modal Body */}
+        {/* Modal Body — only this section scrolls */}
         <div className="notif-modal-body">
           {saveToast && (
             <div className="notif-save-toast">
@@ -83,6 +99,8 @@ export default function NotificationSettingsModal({ isOpen, onClose }) {
           )}
 
           <div className="notif-settings-group">
+            <p className="notif-section-label">Tùy chọn thông báo</p>
+
             {/* 1. Article Comment */}
             <div className="notif-setting-row">
               <div className="notif-setting-info">
@@ -168,18 +186,20 @@ export default function NotificationSettingsModal({ isOpen, onClose }) {
           <div className="notif-admin-note">
             <span className="admin-note-icon">🛡️</span>
             <p className="admin-note-text">
-              <strong>Thông báo hệ thống & Admin:</strong> Các thông báo từ Ban quản trị, duyệt bài và cảnh báo tài khoản sẽ <em>luôn được gửi</em> để bảo đảm an toàn.
+              <strong>Thông báo hệ thống &amp; Admin:</strong> Các thông báo từ Ban quản trị, duyệt bài và cảnh báo tài khoản sẽ <em>luôn được gửi</em> để bảo đảm an toàn.
             </p>
           </div>
         </div>
 
-        {/* Modal Footer */}
+        {/* Modal Footer — always visible, flex-shrink: 0 */}
         <div className="notif-modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>
+          <button className="notif-close-btn" onClick={onClose}>
             Đóng
           </button>
         </div>
+
       </div>
-    </div>
+    </div>,
+    document.body   // ← Portal: renders outside Header's stacking context
   );
 }

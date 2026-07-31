@@ -151,20 +151,20 @@ export default function Profile() {
   useEffect(() => {
     if (!targetUid) return;
 
-    // 1. Count articles this user has liked (likedBy array contains targetUid)
-    //    Firestore does not support array-contains on a top-level query across all docs easily,
-    //    so we use array-contains query.
+    // 1. Fetch articles by this user (Filter isDeleted in JS to avoid composite index error on cold F5 load)
     const articlesQuery = query(
       collection(db, 'articles'),
-      where('authorId', '==', targetUid),
-      where('isDeleted', '!=', true)
+      where('authorId', '==', targetUid)
     );
     const unsubArticles = onSnapshot(articlesQuery, (snap) => {
-      const userArts = snap.docs.map(d => ({
-        id: d.id,
-        ...d.data(),
-        createdAt: d.data().createdAt?.toDate ? d.data().createdAt.toDate().toISOString() : d.data().createdAt || new Date().toISOString()
-      }));
+      const userArts = snap.docs
+        .map(d => ({
+          id: d.id,
+          ...d.data(),
+          createdAt: d.data().createdAt?.toDate ? d.data().createdAt.toDate().toISOString() : d.data().createdAt || new Date().toISOString()
+        }))
+        .filter(art => art.isDeleted !== true);
+
       userArts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setMyArticles(userArts);
     }, err => console.error('Stats articles snapshot error:', err));
@@ -175,10 +175,11 @@ export default function Profile() {
       where('likedBy', 'array-contains', targetUid)
     );
     const unsubLikes = onSnapshot(likedQuery, (snap) => {
-      setTotalLikesGiven(snap.size);
+      const activeLiked = snap.docs.filter(d => d.data().isDeleted !== true);
+      setTotalLikesGiven(activeLiked.length);
     }, err => console.error('Stats likes given snapshot error:', err));
 
-    // 3. Count fav docs where userId == targetUid (bao gồm bài của bất kỳ ai)
+    // 3. Count fav docs where userId == targetUid
     const favQuery = query(
       collection(db, 'fav'),
       where('userId', '==', targetUid)
@@ -576,6 +577,11 @@ export default function Profile() {
         <div className="profile-stats-section">
           <h3 className="profile-stats-title">Thống kê hoạt động</h3>
           <div className="profile-stats-grid">
+            <div className="profile-stat-card">
+              <span className="profile-stat-icon">📝</span>
+              <span className="profile-stat-value">{myArticles.length.toLocaleString('vi-VN')}</span>
+              <span className="profile-stat-label">Bài viết đã tạo</span>
+            </div>
             <div className="profile-stat-card">
               <span className="profile-stat-icon">👍</span>
               <span className="profile-stat-value">{totalLikesGiven.toLocaleString('vi-VN')}</span>

@@ -143,12 +143,12 @@ export default function Home() {
               </Link>
 
               {user ? (
-                <Link to="/consultation" className="btn btn-secondary">
-                  Đặt lịch tham vấn
+                <Link to="/consultation" className="btn btn-secondary btn-consultation">
+                  🗓️ Đặt lịch tham vấn
                 </Link>
               ) : (
-                <Link to="/login" className="btn btn-secondary">
-                  Đăng nhập để bắt đầu
+                <Link to="/login" className="btn btn-secondary btn-consultation">
+                  🔑 Đăng nhập để bắt đầu
                 </Link>
               )}
             </div>
