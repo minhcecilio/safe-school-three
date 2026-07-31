@@ -1,0 +1,314 @@
+/* ─── App Header ─────────────────────────────────────── */
+.app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  background-color: transparent;
+  z-index: 1000;
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid transparent;
+}
+
+.app-header.scrolled {
+  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-md);
+  border-bottom: 1px solid var(--gray-medium);
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 100%;
+}
+
+/* ─── Logo ────────────────────────────────────────────── */
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 1.3rem;
+  transition: transform var(--transition-fast);
+}
+
+.header-logo:hover {
+  transform: translateY(-1px);
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  color: var(--primary-light);
+}
+
+.logo-text {
+  letter-spacing: -0.5px;
+}
+
+.accent-text {
+  color: var(--primary-light);
+}
+
+/* ─── Nav Menu ────────────────────────────────────────── */
+.header-nav {
+  display: flex;
+  align-items: center;
+}
+
+.nav-list {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.nav-link {
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--gray-text);
+  padding: 8px 12px;
+  border-radius: var(--border-radius-sm);
+  position: relative;
+}
+
+.nav-link:hover {
+  color: var(--primary-light);
+  background-color: var(--gray-light);
+}
+
+.nav-link.active {
+  color: var(--primary-light);
+  font-weight: 600;
+}
+
+.nav-link.active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  background-color: var(--primary-light);
+  border-radius: 2px;
+}
+
+/* ─── Right Action Area ───────────────────────────────── */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Profile / User icon button */
+.avatar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--primary);
+  background-color: var(--gray-light);
+  border: 1px solid var(--gray-medium);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  outline: none;
+  overflow: hidden;
+  padding: 0;
+}
+
+.avatar-btn:hover {
+  color: var(--white);
+  background-color: var(--primary-light);
+  border-color: var(--primary-light);
+  transform: scale(1.05);
+}
+
+.user-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* ─── Mobile Hamburger ────────────────────────────────── */
+.hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 24px;
+  height: 18px;
+  z-index: 1010;
+  cursor: pointer;
+  background: none;
+  border: none;
+  outline: none;
+  padding: 0;
+}
+
+.hamburger .bar {
+  height: 3px;
+  width: 100%;
+  background-color: var(--primary-dark);
+  border-radius: 2px;
+  transition: all var(--transition-normal);
+}
+
+/* ─── Responsive ──────────────────────────────────────── */
+@media (max-width: 768px) {
+  .hamburger {
+    display: flex;
+  }
+
+  .header-nav {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: 280px;
+    height: 100vh;
+    background-color: var(--white);
+    box-shadow: var(--shadow-xl);
+    z-index: 1005;
+    transition: right var(--transition-normal);
+    padding: 100px 24px 40px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-nav.mobile-open {
+    right: 0;
+  }
+
+  .nav-list {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    gap: 20px;
+  }
+
+  .nav-item {
+    width: 100%;
+  }
+
+  .nav-link {
+    display: block;
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 1.1rem;
+  }
+
+  .nav-link.active::after {
+    left: 16px;
+    right: auto;
+    width: 4px;
+    height: 60%;
+    top: 20%;
+    bottom: auto;
+    border-radius: 2px;
+  }
+
+  .hamburger.active .bar:nth-child(1) {
+    transform: translateY(7.5px) rotate(45deg);
+  }
+
+  .hamburger.active .bar:nth-child(2) {
+    opacity: 0;
+  }
+
+  .hamburger.active .bar:nth-child(3) {
+    transform: translateY(-7.5px) rotate(-45deg);
+  }
+}
+
+/* ─── Options Button and Dropdown Menu ────────────────── */
+.more-menu-container {
+  position: relative;
+  display: inline-block;
+}
+
+.more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--primary);
+  background-color: var(--gray-light);
+  border: 1px solid var(--gray-medium);
+  font-size: 1.4rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+.more-btn:hover {
+  color: var(--white);
+  background-color: var(--primary-light);
+  border-color: var(--primary-light);
+  transform: scale(1.05);
+}
+
+.more-dropdown {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  background-color: var(--white);
+  min-width: 200px;
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--gray-medium);
+  overflow: hidden;
+  z-index: 1010;
+  display: flex;
+  flex-direction: column;
+  animation: dropdownFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-item {
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 0.95rem;
+  color: var(--gray-dark);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.dropdown-item:hover {
+  background-color: var(--gray-light);
+  color: var(--primary-light);
+}
+
+/* Adjustments on small screens */
+@media (max-width: 768px) {
+  .more-dropdown {
+    right: 0;
+    left: auto;
+    top: 48px;
+  }
+}
+
